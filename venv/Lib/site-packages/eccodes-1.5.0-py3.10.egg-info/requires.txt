@@ -1,0 +1,4 @@
+numpy
+attrs
+cffi
+findlibs

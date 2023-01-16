@@ -21,7 +21,7 @@
 ###############################################################################
 
 import pytest
-from synop2dict import message_extract, convert_to_dict, to_json
+from synop2bufr import message_extract, convert_to_dict, to_json
 
 # * Happy path tests
 

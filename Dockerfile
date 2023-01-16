@@ -7,25 +7,19 @@ ENV TZ="Etc/UTC" \
     PATH="$PATH;/opt/eccodes/bin"
 
 
-# We need latest version of BUFR tables, these are only available in bookworm release, add to sources
-# RUN echo 'deb http://deb.debian.org/debian bookworm main' >> /etc/apt/sources.list
-
 RUN echo "Acquire::Check-Valid-Until \"false\";\nAcquire::Check-Date \"false\";" | cat > /etc/apt/apt.conf.d/10no--check-valid-until \
     && apt-get update -y \
     && apt-get install -y ${DEBIAN_PACKAGES} \
     && apt-get install -y python3 python3-pip \
     && pip3 install --no-cache-dir https://github.com/wmo-im/csv2bufr/archive/refs/tags/v0.3.1.zip \
-    && pip3 install --no-cache-dir https://github.com/wmo-im/pymetdecoder/releases/tag/v0.1.0.zip \
-    && pip3 install pytest-docker
+    && pip3 install --no-cache-dir https://github.com/wmo-im/pymetdecoder/archive/refs/tags/v0.1.0.zip
 
 #WORKDIR /build
 # copy the app
 COPY . /build
 
 # install pymetdecoder and synop2bufr
-RUN cd /build/pymetdecoder \
-    && python3 setup.py install \
-    && cd /build/synop2dict \
+RUN cd /build \
     && python3 setup.py install \
     # delete the build folder that is no longer needed after installing the modules
     && rm -r /build

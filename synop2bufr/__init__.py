@@ -226,25 +226,29 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
     if 'relative_humidity' in decode.keys():
         output['relative_humidity'] = decode['relative_humidity']
     else:
-        # if RH is missing estimate fomr air temperature and dew point
+        # if RH is missing estimate from air temperature and dew point
         # temperature
         #
         # Reference to equation / method required
-        
+
         A = output.get('air_temperature')
         D = output.get('dewpoint_temperature')
 
-        A -= 273.15
-        D -= 273.15
+        if None in (A, D):
+            output['relative_humidity'] = None
+        else:
+            A -= 273.15
+            D -= 273.15
 
-        beta = 17.625
-        lam = 243.04
+            beta = 17.625
+            lam = 243.04
 
-        U = 100 * math.exp(((beta*D)/(lam+D)) - ((beta*A)/(lam+A)))
+            U = 100 * math.exp(((beta*D)/(lam+D)) - ((beta*A)/(lam+A)))
 
-        output['relative_humidity'] = U
+            output['relative_humidity'] = U
 
-    # Pressure is given in hPa, which we convert to Pa. By B/C1.3.1, pressure has precision in tens of Pa
+    # Pressure is given in hPa, which we convert to Pa. By B/C 1.3.1,
+    # pressure has precision in tens of Pa
     if 'station_pressure' in decode.keys():
         output['station_pressure'] = round(
             decode['station_pressure']['value'] * 100, -1)
@@ -887,14 +891,20 @@ def message_extract(data):
                     "Delimiters (=) are not present in the string, thus unable to identify separate SYNOP messages."
                 )
             d = re.sub(r"\n+", " ", d)
+            LOGGER.error(d)
             _messages = d.split("=")
             num_msg = len(_messages)
+            LOGGER.error(num_msg)
             for idx in range(num_msg):
-                if len(_messages[idx]) > 0:
+                if len(re.sub(r"\s+", "", f"{_messages[idx]}")) > 0:
+                # if len(_messages[idx]) > 0:
                     _messages[idx] = re.sub(r"\s+", " ", f"{s0} {_messages[idx]}")
+                    # messages.extend( re.sub(r"\s+", " ", f"{s0} {_messages[idx]}") )
                 else:
                     _messages[idx] = None
-            messages.extend(_messages)
+                LOGGER.error(_messages[idx])
+            messages.extend(list(filter(None,_messages)))
+            LOGGER.error(messages)
     # Return the messages
     return messages
 
@@ -958,11 +968,6 @@ def transform(data: str, metadata: str, year: int, month: int):
         tsi_mapping = {}
         for row in reader:
             single_row = dict(zip(col_names, row))
-            LOGGER.error("=============================================")
-            LOGGER.error(json.dumps(single_row, indent=4))
-            LOGGER.error(col_names)
-            LOGGER.error(row)
-            LOGGER.error("=============================================")
             wsi = single_row['wigos_station_identifier']
             tsi = single_row['traditional_station_identifier']
             metadata_dict[wsi] = deepcopy(single_row)
@@ -993,6 +998,7 @@ def transform(data: str, metadata: str, year: int, month: int):
 
         # parse example_data to dictionary and get number of section 3 and 4 clouds
         msg, num_s3_clouds, num_s4_clouds = parse_synop(message, year, month)
+        LOGGER.error(msg)
         # get TSI
         tsi = msg['station_id']
         # set WSI
@@ -1085,11 +1091,6 @@ def transform(data: str, metadata: str, year: int, month: int):
             LOGGER.error("Error creating BUFRMessage")
             raise e
 
-        LOGGER.error("----------------------------")
-        for key in message.dict.keys():
-            LOGGER.error(key)
-        LOGGER.error("----------------------------")
-        print(mapping)
         message.parse(msg, mapping) # parse
 
         try:

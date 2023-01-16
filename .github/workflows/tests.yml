@@ -1,0 +1,40 @@
+name: tests ⚙️
+
+on: [ push, pull_request ]
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.7, 3.8, 3.9]
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v2
+      name: Setup Python ${{ matrix.python-version }}
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Setup conda
+      uses: s-weigand/setup-conda@v1
+      with:
+        update-conda: true
+        python-version: ${{ matrix.python-version }}
+        conda-channels: anaconda, conda-forge
+
+    - name: Install requirements 📦
+      run: |
+        conda install eccodes
+        python3 -m pip install --upgrade pip
+        pip3 install -r requirements.txt
+        pip3 install -r requirements-dev.txt
+        pip3 install https://github.com/wmo-im/csv2bufr/archive/refs/tags/v0.3.1.zip
+        pip3 install --no-cache-dir https://github.com/wmo-im/pymetdecoder/archive/refs/tags/v0.1.0.zip        
+        python3 setup.py install
+    - name: run tests ⚙️
+      run: |
+        pytest
+    - name: run flake8 ⚙️
+      run: |
+        flake8

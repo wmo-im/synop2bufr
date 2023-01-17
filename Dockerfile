@@ -11,8 +11,8 @@ RUN echo "Acquire::Check-Valid-Until \"false\";\nAcquire::Check-Date \"false\";"
     && apt-get update -y \
     && apt-get install -y ${DEBIAN_PACKAGES} \
     && apt-get install -y python3 python3-pip \
-    && pip3 install --no-cache-dir https://github.com/wmo-im/csv2bufr/archive/refs/tags/v0.3.1.zip \
-    && pip3 install --no-cache-dir https://github.com/wmo-im/pymetdecoder/archive/refs/tags/v0.1.0.zip
+    && pip3 install --no-cache-dir https://github.com/wmo-im/csv2bufr/archive/master.zip \
+    && pip3 install --no-cache-dir https://github.com/wmo-im/pymetdecoder/archive/refs/tags/v0.1.1.zip
 
 #WORKDIR /build
 # copy the app

@@ -19,12 +19,12 @@
 #
 ###############################################################################
 import click
-import json
 import logging
 import os.path
 import sys
 
 from synop2bufr import __version__, transform as transform_synop
+
 
 def cli_option_verbosity(f):
     logging_options = ["ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"]
@@ -55,9 +55,11 @@ def cli():
 
 @click.command()
 @click.pass_context
-@click.option('--input', 'input', required=False, type=click.File(errors="ignore"),
+@click.option('--input', 'input', required=False,
+              type=click.File(errors="ignore"),
               help="Name/directory of the SYNOP TAC file to convert to BUFR, or alternatively a SYNOP message itself.")  # noqa
-@click.option('--metadata', 'metadata', required=False, type=click.File(errors="ignore"),
+@click.option('--metadata', 'metadata', required=False,
+              type=click.File(errors="ignore"),
               help="Name/directory of the station metadata.")
 @click.option('--output-dir', 'output_dir', required=False,
               help="Directory for the output BUFR files.")

@@ -37,25 +37,19 @@ def multiple_messages():
 def single_message():
     return """AAXX 21121
 15001 05515 32931 10103 21090 39765 42250 57020 60071 72006 82110 91155
-333 10178 21073 34101 55055 00010 20003 30002 50001 60004
-60035 70500 83145 81533 91008 91111
-444 18031 22053
+ 333 10178 21073 34101 55055 00010 20003 30002 50001 60004
+ 60035 70500 83145 81533 91008 91111
+ 444 18031 22053
     """
 
 
 @pytest.fixture
 def metadata_string():
-    return """station_name,wigos_station_identifier,
-traditional_station_identifier,facility_type,
-latitude,longitude,elevation,territory_name,
-wmo_region
-OCNA SUGATAG,0-20000-0-15015,15015,Land (fixed),
-47.77706163,23.94046026,503,Romania,6
-BOTOSANI,0-20000-0-15020,15020,Land (fixed),
-47.73565324,26.64555017,161,Romania,6
-IASI,0-20000-0-15090,15090,Land (fixed),
-47.16333333,27.62722222,74.29,Romania,6
-"""
+    md = "station_name,wigos_station_identifier,traditional_station_identifier,facility_type,latitude,longitude,elevation,territory_name,wmo_region\n" + \
+            "OCNA SUGATAG,0-20000-0-15015,15015,Land (fixed),47.77706163,23.94046026,503,Romania,6\n" + \
+            "BOTOSANI,0-20000-0-15020,15020,Land (fixed),47.73565324,26.64555017,161,Romania,6\n" + \
+            "IASI,0-20000-0-15090,15090,Land (fixed),47.16333333,27.62722222,74.29,Romania,6"  # noqa
+    return md
 
 
 def test_message_separation(multiple_messages):
@@ -63,12 +57,9 @@ def test_message_separation(multiple_messages):
     msg_list = message_extract(multiple_messages)
     assert len(msg_list) == 3
     # Assert each message has been extracted as intended
-    assert msg_list[0] == """AAXX 21121 15015 02999 02501
-    10103 21090 39765 42952 57020 60001"""
-    assert msg_list[1] == """AAXX 21121 15020 02997
-    23104 10130 21075 30177 40377 58020 60001 81041"""
-    assert msg_list[2] == """AAXX 21121 15090 02997
-    53102 10139 21075 30271 40364 58031 60001 82046"""
+    assert msg_list[0] == "AAXX 21121 15015 02999 02501 10103 21090 39765 42952 57020 60001"  # noqa
+    assert msg_list[1] == "AAXX 21121 15020 02997 23104 10130 21075 30177 40377 58020 60001 81041"  # noqa
+    assert msg_list[2] == "AAXX 21121 15090 02997 53102 10139 21075 30271 40364 58031 60001 82046"  # noqa
 
 
 def test_conversion(single_message):
@@ -162,9 +153,7 @@ def test_invalid_separation():
     with pytest.raises(Exception) as e:
         # Attempt to extract each message
         message_extract(missing_delimiter)
-    assert str(
-        e.value) == """Delimiters (=) are not present in the string,
-    thus unable to identify separate SYNOP messages."""
+    assert str(e.value) == "Delimiters (=) are not present in the string, thus unable to identify separate SYNOP messages."  # noqa
 
 
 # def test_no_type():

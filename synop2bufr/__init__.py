@@ -967,9 +967,7 @@ def message_extract(data):
             s0 = d
         else:
             if not d.__contains__("="):
-                raise Exception("""Delimiters (=) are not present in the
-                                string, thus unable to identify separate
-                                SYNOP messages.""")
+                raise Exception("Delimiters (=) are not present in the string, thus unable to identify separate SYNOP messages.")  # noqa
             d = re.sub(r"\n+", " ", d)
             LOGGER.error(d)
             _messages = d.split("=")

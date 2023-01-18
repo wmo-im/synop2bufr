@@ -80,7 +80,6 @@ def transform(ctx, input, metadata, output_dir, year, month, verbosity):
         bufr_filename = f"{output_dir}{os.sep}{key}.bufr4"
         with open(bufr_filename, "wb") as fh:
             fh.write(item["bufr4"])
-        click.echo(item)
 
 
 cli.add_command(transform)

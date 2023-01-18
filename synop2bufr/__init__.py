@@ -969,10 +969,8 @@ def message_extract(data):
             if not d.__contains__("="):
                 raise Exception("Delimiters (=) are not present in the string, thus unable to identify separate SYNOP messages.")  # noqa
             d = re.sub(r"\n+", " ", d)
-            LOGGER.error(d)
             _messages = d.split("=")
             num_msg = len(_messages)
-            LOGGER.error(num_msg)
             for idx in range(num_msg):
                 # if len(_messages[idx]) > 0:
                 if len(re.sub(r"\s+", "", f"{_messages[idx]}")) > 0:
@@ -983,9 +981,7 @@ def message_extract(data):
                     # )
                 else:
                     _messages[idx] = None
-                LOGGER.error(_messages[idx])
             messages.extend(list(filter(None, _messages)))
-            LOGGER.error(messages)
     # Return the messages
     return messages
 
@@ -1087,7 +1083,6 @@ def transform(data: str, metadata: str, year: int, month: int):
         # parse example_data to dictionary and get number of section 3 and 4
         # clouds
         msg, num_s3_clouds, num_s4_clouds = parse_synop(message, year, month)
-        LOGGER.error(msg)
         # get TSI
         tsi = msg['station_id']
         # set WSI

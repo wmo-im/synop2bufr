@@ -76,7 +76,7 @@ def transform(ctx, input, metadata, output_dir, year, month, verbosity):
         raise click.ClickException(e)
 
     for item in result:
-        key = item['_meta']["identifier"]
+        key = item['_meta']["id"]
         bufr_filename = f"{output_dir}{os.sep}{key}.bufr4"
         with open(bufr_filename, "wb") as fh:
             fh.write(item["bufr4"])

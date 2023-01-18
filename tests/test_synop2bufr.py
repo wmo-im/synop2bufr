@@ -131,13 +131,10 @@ def test_bufr(multiple_messages, metadata_string):
     result = transform(multiple_messages, metadata_string, 2022, 3)
     msgs = {}
     for item in result:
-        msgs[item['_meta']['identifier']] = item
-    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['md5'] == \
-        '4adee1b8af9b257653f6fe724bd83744'
-    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['md5'] == \
-        '52f2ed9ec19a76f88325159da3c5a850'
-    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['md5'] == \
-        '8c0d5d44f1673447530181559d23f2f0'
+        msgs[item['_meta']['id']] = item
+    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == '4adee1b8af9b257653f6fe724bd83744'  # noqa
+    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == '52f2ed9ec19a76f88325159da3c5a850'  # noqa
+    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == '8c0d5d44f1673447530181559d23f2f0'  # noqa
 
 
 def test_invalid_separation():

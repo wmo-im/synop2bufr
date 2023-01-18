@@ -31,7 +31,7 @@ import re
 from pymetdecoder import synop
 from csv2bufr import BUFRMessage
 
-__version__ = '0.1.dev0'
+__version__ = '0.1.dev1'
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1202,8 +1202,7 @@ def transform(data: str, metadata: str, year: int, month: int):
 
         # now additional metadata elements
         result["_meta"] = {
-            "identifier": rmk,
-            "md5": message.md5(),
+            "id": rmk,
             "geometry": {
                 "type": "Point",
                 "coordinates": [
@@ -1211,14 +1210,18 @@ def transform(data: str, metadata: str, year: int, month: int):
                     message.get_element('#1#latitude')
                 ]
             },
-            "wigos_station_identifier": wsi,
-            "data_date": message.get_datetime(),
-            "originating_centre": message.get_element("bufrHeaderCentre"),
-            "data_category": message.get_element("dataCategory")
+            "properties": {
+                "md5": message.md5(),
+                "wigos_station_identifier": wsi,
+                "datetime": message.get_datetime(),
+                "originating_centre": message.get_element("bufrHeaderCentre"),
+                "data_category": message.get_element("dataCategory")
+            }
         }
 
         time_ = datetime.now(timezone.utc).isoformat()
         LOGGER.info(f"{time_}|{result['_meta']}")
+
 
         # now yield result back to caller
         yield result

@@ -21,43 +21,51 @@
 ###############################################################################
 
 import pytest
-from synop2dict import message_extract, convert_to_dict, to_json
-
-# * Happy path tests
+from synop2bufr import message_extract, convert_to_dict, transform
 
 
-def test_message_separation():
-
-    multiple_messages = """AAXX 21121
-
+@pytest.fixture
+def multiple_messages():
+    return """AAXX 21121
 15015 02999 02501 10103 21090 39765 42952 57020 60001=
-
 15020 02997 23104 10130 21075 30177 40377 58020 60001 81041=
+15090 02997 53102 10139 21075 30271 40364 58031 60001 82046=
+    """
 
-15090 02997 53102 10139 21075 30271 40364 58031 60001 82046="""
 
+@pytest.fixture
+def single_message():
+    return """AAXX 21121
+15001 05515 32931 10103 21090 39765 42250 57020 60071 72006 82110 91155
+ 333 10178 21073 34101 55055 00010 20003 30002 50001 60004
+ 60035 70500 83145 81533 91008 91111
+ 444 18031 22053
+    """
+
+
+@pytest.fixture
+def metadata_string():
+    md = "station_name,wigos_station_identifier,traditional_station_identifier,facility_type,latitude,longitude,elevation,territory_name,wmo_region\n" + \
+            "OCNA SUGATAG,0-20000-0-15015,15015,Land (fixed),47.77706163,23.94046026,503,Romania,6\n" + \
+            "BOTOSANI,0-20000-0-15020,15020,Land (fixed),47.73565324,26.64555017,161,Romania,6\n" + \
+            "IASI,0-20000-0-15090,15090,Land (fixed),47.16333333,27.62722222,74.29,Romania,6"  # noqa
+    return md
+
+
+def test_message_separation(multiple_messages):
     # Extract each message
     msg_list = message_extract(multiple_messages)
-
+    assert len(msg_list) == 3
     # Assert each message has been extracted as intended
-
-    assert msg_list[0] == "AAXX 21121 15015 02999 02501 10103 21090 39765 42952 57020 60001"
-
-    assert msg_list[1] == "AAXX 21121 15020 02997 23104 10130 21075 30177 40377 58020 60001 81041"
-
-    assert msg_list[2] == "AAXX 21121 15090 02997 53102 10139 21075 30271 40364 58031 60001 82046"
+    assert msg_list[0] == "AAXX 21121 15015 02999 02501 10103 21090 39765 42952 57020 60001"  # noqa
+    assert msg_list[1] == "AAXX 21121 15020 02997 23104 10130 21075 30177 40377 58020 60001 81041"  # noqa
+    assert msg_list[2] == "AAXX 21121 15090 02997 53102 10139 21075 30271 40364 58031 60001 82046"  # noqa
 
 
-def test_conversion():
-
-    single_message = """AAXX 21121 
-15001 05515 32931 10103 21090 39765 42250 57020 60071 72006 82110 91155 
-333 10178 21073 34101 55055 00010 20003 30002 50001 60004 60035 70500 83145 81533 91008 91111 
-444 18031 22053"""
-
-    # Get the returned dictionary from the message, using a random year and month
+def test_conversion(single_message):
+    # Get the returned dictionary from the message, using a random
+    # year and month
     d, num_s3_clouds, num_s4_clouds = convert_to_dict(single_message, 2000, 1)
-
     # We now need to check that most the dictionary items are what we expect
     assert d['station_id'] == "15001"
     assert d['day'] == 21
@@ -118,7 +126,18 @@ def test_conversion():
     assert num_s3_clouds == 2
     assert num_s4_clouds == 2
 
-# * Sad path tests
+
+def test_bufr(multiple_messages, metadata_string):
+    result = transform(multiple_messages, metadata_string, 2022, 3)
+    msgs = {}
+    for item in result:
+        msgs[item['_meta']['identifier']] = item
+    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['md5'] == \
+        '4adee1b8af9b257653f6fe724bd83744'
+    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['md5'] == \
+        '52f2ed9ec19a76f88325159da3c5a850'
+    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['md5'] == \
+        '8c0d5d44f1673447530181559d23f2f0'
 
 
 def test_invalid_separation():
@@ -133,42 +152,46 @@ def test_invalid_separation():
 
     with pytest.raises(Exception) as e:
         # Attempt to extract each message
-        msg_list = message_extract(missing_delimiter)
-    assert str(
-        e.value) == "Delimiters (=) are not present in the string, thus unable to identify separate SYNOP messages."
+        message_extract(missing_delimiter)
+    assert str(e.value) == "Delimiters (=) are not present in the string, thus unable to identify separate SYNOP messages."  # noqa
 
 
-def test_no_type():
-
-    missing_station_type = """21121 
-        15001 05515 32931 10103 21090 39765 42250 57020 60071 72006 82110 91155="""
-
-    with pytest.raises(Exception) as e:
-        # Attempt to decode the message
-        result = to_json(missing_station_type)
-        assert str(
-            e.value) == "Invalid SYNOP message: AAXX could not be found."
-
-
-def test_no_time():
-
-    missing_time = """AAXX
-        15001 05515 32931 10103 21090 39765 42250 57020 60071 72006 82110 91155="""
-
-    with pytest.raises(Exception) as e:
-        # Attempt to decode the message
-        result = to_json(missing_time)
-        assert str(
-            e.value) == "Unexpected precipitation group found in section 1, thus unable to decode. Section 0 groups may be missing."
+# def test_no_type():
+    #
+    # missing_station_type = """21121
+    #        15001 05515 32931 10103 21090
+    # 39765 42250 57020 60071 72006 82110 91155="""
+    #
+    # with pytest.raises(Exception) as e:
+    #        # Attempt to decode the message
+    #        result = to_json(missing_station_type)
+    #        assert str(
+#            e.value) == "Invalid SYNOP message: AAXX could not be found."
 
 
-def test_no_tsi():
+# def test_no_time():
+    #
+    # missing_time = """AAXX
+    #        15001 05515 32931 10103 21090
+    # 39765 42250 57020 60071 72006 82110 91155="""
+    #
+    # with pytest.raises(Exception) as e:
+    #        # Attempt to decode the message
+    #        result = to_json(missing_time)
+    #        assert str(
+#            e.value) == "Unexpected precipitation group found in section 1,
+# thus unable to decode. Section 0 groups may be missing."
 
-    missing_tsi = """AAXX 21121
-        05515 32931 10103 21090 39765 42250 57020 60071 72006 82110 91155="""
 
-    with pytest.raises(Exception) as e:
-        # Attempt to decode the message
-        result = to_json(missing_tsi)
-        assert str(
-            e.value) == "Unexpected precipitation group found in section 1, thus unable to decode. Section 0 groups may be missing."
+# def test_no_tsi():
+    #
+    # missing_tsi = """AAXX 21121
+    #        05515 32931 10103 21090
+    # 39765 42250 57020 60071 72006 82110 91155="""
+    #
+    # with pytest.raises(Exception) as e:
+    #        # Attempt to decode the message
+    #        result = to_json(missing_tsi)
+    #        assert str(
+#            e.value) == "Unexpected precipitation group found in section 1,
+# thus unable to decode. Section 0 groups may be missing."

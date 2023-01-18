@@ -1,2 +1,0 @@
-include LICENSE README.md requirements.txt
-recursive-include synop2dict example_data

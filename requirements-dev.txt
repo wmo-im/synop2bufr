@@ -1,0 +1,4 @@
+flake8
+pytest
+sphinx
+wmo_sphinx_theme

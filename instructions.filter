@@ -1,5 +1,0 @@
-set unpack=1;
- 
-set extractSubset=23;
-set doExtractSubsets=1;
-write;

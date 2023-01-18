@@ -1222,6 +1222,5 @@ def transform(data: str, metadata: str, year: int, month: int):
         time_ = datetime.now(timezone.utc).isoformat()
         LOGGER.info(f"{time_}|{result['_meta']}")
 
-
         # now yield result back to caller
         yield result

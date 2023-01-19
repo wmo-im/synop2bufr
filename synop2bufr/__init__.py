@@ -80,6 +80,8 @@ with open(MAPPINGS) as fh:
     _mapping = json.load(fh)
 
 
+# TODO, rename convert_to_dict to parse_synop (I feel convert_to_dict is too
+# generic)
 def convert_to_dict(message: str, year: int, month: int) -> dict:
     """
     This function parses a SYNOP message, storing and returning the
@@ -330,17 +332,28 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
     # We translate these cloud type flags from the SYNOP codes to the
     # BUFR codes
     if 'cloud_types' in decode.keys():
-
-        Cl = decode['cloud_types']['low_cloud_type']['value']
-        Cl_translated = Cl + 30
+        Cl = decode['cloud_types']['low_cloud_type']
+        if Cl is not None:
+            Cl = Cl['value']
+            Cl_translated = Cl + 30
+        else:
+            Cl_translated = None
         output['low_cloud_type'] = Cl_translated
 
-        Cm = decode['cloud_types']['middle_cloud_type']['value']
-        Cm_translated = Cm + 20
+        Cm = decode['cloud_types']['middle_cloud_type']
+        if Cm is not None:
+            Cm = Cm['value']
+            Cm_translated = Cm + 20
+        else:
+            Cm_translated = None
         output['middle_cloud_type'] = Cm_translated
 
-        Ch = decode['cloud_types']['high_cloud_type']['value']
-        Ch_translated = Ch + 10
+        Ch = decode['cloud_types']['high_cloud_type']
+        if Ch is not None:
+            Ch = Ch['value']
+            Ch_translated = Ch + 10
+        else:
+            Ch_translated = None
         output['high_cloud_type'] = Ch_translated
 
         if 'low_cloud_amount' in decode['cloud_types'].keys():
@@ -969,10 +982,8 @@ def message_extract(data):
             if not d.__contains__("="):
                 raise Exception("Delimiters (=) are not present in the string, thus unable to identify separate SYNOP messages.")  # noqa
             d = re.sub(r"\n+", " ", d)
-            LOGGER.error(d)
             _messages = d.split("=")
             num_msg = len(_messages)
-            LOGGER.error(num_msg)
             for idx in range(num_msg):
                 # if len(_messages[idx]) > 0:
                 if len(re.sub(r"\s+", "", f"{_messages[idx]}")) > 0:
@@ -983,9 +994,7 @@ def message_extract(data):
                     # )
                 else:
                     _messages[idx] = None
-                LOGGER.error(_messages[idx])
             messages.extend(list(filter(None, _messages)))
-            LOGGER.error(messages)
     # Return the messages
     return messages
 
@@ -1086,8 +1095,11 @@ def transform(data: str, metadata: str, year: int, month: int):
 
         # parse example_data to dictionary and get number of section 3 and 4
         # clouds
-        msg, num_s3_clouds, num_s4_clouds = parse_synop(message, year, month)
-        LOGGER.error(msg)
+        try:
+            msg, num_s3_clouds, num_s4_clouds = parse_synop(message, year, month)  # noqa
+        except Exception as e:
+            LOGGER.error(f"Error parsing SYNOP: {message}")
+            raise e
         # get TSI
         tsi = msg['station_id']
         # set WSI
@@ -1207,8 +1219,7 @@ def transform(data: str, metadata: str, year: int, month: int):
 
         # now additional metadata elements
         result["_meta"] = {
-            "identifier": rmk,
-            "md5": message.md5(),
+            "id": rmk,
             "geometry": {
                 "type": "Point",
                 "coordinates": [
@@ -1216,10 +1227,13 @@ def transform(data: str, metadata: str, year: int, month: int):
                     message.get_element('#1#latitude')
                 ]
             },
-            "wigos_station_identifier": wsi,
-            "data_date": message.get_datetime(),
-            "originating_centre": message.get_element("bufrHeaderCentre"),
-            "data_category": message.get_element("dataCategory")
+            "properties": {
+                "md5": message.md5(),
+                "wigos_station_identifier": wsi,
+                "datetime": message.get_datetime(),
+                "originating_centre": message.get_element("bufrHeaderCentre"),
+                "data_category": message.get_element("dataCategory")
+            }
         }
 
         time_ = datetime.now(timezone.utc).isoformat()

@@ -55,17 +55,17 @@ def cli():
 
 @click.command()
 @click.pass_context
-@click.option('--input', 'input', required=False,
+@click.option('--input', 'input', required=True,
               type=click.File(errors="ignore"),
               help="Name/directory of the SYNOP TAC file to convert to BUFR, or alternatively a SYNOP message itself.")  # noqa
-@click.option('--metadata', 'metadata', required=False,
+@click.option('--metadata', 'metadata', required=True,
               type=click.File(errors="ignore"),
               help="Name/directory of the station metadata.")
-@click.option('--output-dir', 'output_dir', required=False,
+@click.option('--output-dir', 'output_dir', required=True,
               help="Directory for the output BUFR files.")
-@click.option('--year', 'year', required=False,
+@click.option('--year', 'year', required=True,
               help="Year that the example_data correspond to.")
-@click.option('--month', 'month', required=False,
+@click.option('--month', 'month', required=True,
               help="Month that the example_data correspond to.")
 @cli_option_verbosity
 def transform(ctx, input, metadata, output_dir, year, month, verbosity):
@@ -76,11 +76,10 @@ def transform(ctx, input, metadata, output_dir, year, month, verbosity):
         raise click.ClickException(e)
 
     for item in result:
-        key = item['_meta']["identifier"]
+        key = item['_meta']["id"]
         bufr_filename = f"{output_dir}{os.sep}{key}.bufr4"
         with open(bufr_filename, "wb") as fh:
             fh.write(item["bufr4"])
-        click.echo(item)
 
 
 cli.add_command(transform)

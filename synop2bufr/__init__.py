@@ -98,8 +98,6 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
         LOGGER.error("Unable to decode the SYNOP message.")
         raise e
 
-    LOGGER.error(message)
-
     # Get the template dictionary to be filled
     output = deepcopy(synop_template)
 
@@ -332,7 +330,6 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
     # We translate these cloud type flags from the SYNOP codes to the
     # BUFR codes
     if 'cloud_types' in decode.keys():
-        LOGGER.error(decode['cloud_types'])
         Cl = decode['cloud_types']['low_cloud_type']
         if Cl is not None:
             Cl = Cl['value']

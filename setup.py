@@ -61,6 +61,7 @@ def get_package_version():
 KEYWORDS = [
     'WMO',
     'SYNOP',
+    'BUFR',
     'decoding',
     'weather',
     'observations'
@@ -68,35 +69,42 @@ KEYWORDS = [
 
 DESCRIPTION = 'Convert a SYNOP TAC messages or a SYNOP file to BUFR4.'
 
+# ensure a fresh MANIFEST file is generated
+if (os.path.exists('MANIFEST')):
+    os.unlink('MANIFEST')
 
-setup(name='synop2bufr',
-      version=get_package_version(),
-      description=DESCRIPTION,
-      long_description=read('synop2bufr/README.md'),
-      long_description_content_type='text/markdown',
-      license='Apache Software License',
-      platforms='all',
-      keywords=' '.join(KEYWORDS),
-      author='Rory Burke',
-      author_email='RBurke@wmo.int',
-      install_requires=read('requirements.txt').splitlines(),
-      packages=find_packages(),
-      include_package_data=True,
-      classifiers=[
-          'Development Status :: 3 - Alpha',
-          'Environment :: Console',
-          'Intended Audience :: Developers',
-          'Intended Audience :: Science/Research',
-          'License :: OSI Approved :: Apache Software License',
-          'Operating System :: OS Independent',
-          'Programming Language :: Python',
-          'Topic :: Scientific/Engineering',
-      ],
-      entry_points={
-          'console_scripts': [
-              'synop2bufr=synop2bufr.cli:cli'
-          ]
-      },
-      cmdclass={'test': PyTest},
-      test_suite='tests.run_tests'
-      )
+
+setup(
+    name='synop2bufr',
+    version=get_package_version(),
+    description=DESCRIPTION,
+    long_description=read('README.md'),
+    long_description_content_type='text/markdown',
+    license='Apache Software License',
+    platforms='all',
+    keywords=' '.join(KEYWORDS),
+    author='Rory Burke',
+    author_email='RBurke@wmo.int',
+    maintainer='David I. Berry',
+    maintainer_email='DBerry@wmo.int',
+    install_requires=read('requirements.txt').splitlines(),
+    packages=find_packages(),
+    include_package_data=True,
+    classifiers=[
+        'Development Status :: 3 - Alpha',
+        'Environment :: Console',
+        'Intended Audience :: Developers',
+        'Intended Audience :: Science/Research',
+        'License :: OSI Approved :: Apache Software License',
+        'Operating System :: OS Independent',
+        'Programming Language :: Python',
+        'Topic :: Scientific/Engineering',
+    ],
+    entry_points={
+        'console_scripts': [
+            'synop2bufr=synop2bufr.cli:cli'
+        ]
+    },
+    cmdclass={'test': PyTest},
+    test_suite='tests.run_tests'
+)

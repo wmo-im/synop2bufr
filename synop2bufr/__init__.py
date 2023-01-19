@@ -80,6 +80,8 @@ with open(MAPPINGS) as fh:
     _mapping = json.load(fh)
 
 
+# TODO, rename convert_to_dict to parse_synop (I feel convert_to_dict is too
+# generic)
 def convert_to_dict(message: str, year: int, month: int) -> dict:
     """
     This function parses a SYNOP message, storing and returning the
@@ -1093,7 +1095,11 @@ def transform(data: str, metadata: str, year: int, month: int):
 
         # parse example_data to dictionary and get number of section 3 and 4
         # clouds
-        msg, num_s3_clouds, num_s4_clouds = parse_synop(message, year, month)
+        try:
+            msg, num_s3_clouds, num_s4_clouds = parse_synop(message, year, month)  # noqa
+        except Exception as e:
+            LOGGER.error(f"Error parsing SYNOP: {message}")
+            raise e
         # get TSI
         tsi = msg['station_id']
         # set WSI

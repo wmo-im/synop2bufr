@@ -31,7 +31,7 @@ import re
 from pymetdecoder import synop
 from csv2bufr import BUFRMessage
 
-__version__ = '0.1.dev1'
+__version__ = '0.1.dev0'
 
 LOGGER = logging.getLogger(__name__)
 

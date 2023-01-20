@@ -1,42 +1,43 @@
-# SYNOP2BUFR
+# synop2bufr
 
-This module converts SYNOP files or tac messages into Python dictionaries which can be accessed directly or converted to output BUFR4 files (in accordance with the B/C1 regulations).
+The synop2bufr Python module contains both a command line interface and API to convert data stored in SYNOP or TAC text file to the WMO BUFR data format. More information on the BUFR format can be found in the WMO Manual on Codes, Volume I.2.
 
----
+## Installation
 
-## Installation Guide
+### Requirements
+- Python 3 and above
+- [ecCodes](https://confluence.ecmwf.int/display/ECC)
+- [csv2bufr](https://github.com/wmo-im/csv2bufr)
 
-Everything necessary for use can be installed by building a Docker image and running the code in a Docker container:
+### Dependencies
 
-1. Build the image using `docker build -t synop2bufr .`
+Dependencies are listed in [requirements.txt](https://github.com/wmo-im/synop2bufr/blob/main/requirements.txt). Dependencies are automatically installed during synop2bufr installation.
 
-2. Run the container using `docker run -it -v ${pwd}:/local synop2bufr`
+```bash
+docker build -t synop2bufr:local .
+docker run -it -v ${pwd}:/local synop2bufr
+```
 
-3. Once in the Bash terminal, navigate to the local directory using `cd ./local`
+## Running
 
-Now SYNOP2BUFR has been successfully installed and is ready for use within the Docker container.
+Example data can be found in `data` directory, with the corresponding reference BUFR4 in `data/bufr`.
 
-### Remarks
+To transform SYNOP data file into BUFR:
 
-Example SYNOP data can be found in the _data_ folder, with the corresponding reference BUFR4 in the _reference-bufr_ folder.
-
-To see a demonstration of this module in action, see the `demo.py` file.
-
-To get a feel for how this module behaves, see the unit tests in `./tests/test_synop2bufr.py`
-
-Finally, there is a `bufr_compare.sh` script available that allows you to compare the output BUFR4 files from this module to the corresponding reference BUFR4 files. This script can be ran using `./bufr_compare.sh`
-
----
+```bash
+mkdir output-data
+synop2bufr transform data/A_SMRO01YRBK211200_C_EDZW_20220321120500_12524785.txt --metadata data/metadata.csv --year 2023 --month 03 --output-dir output-data
+```
 
 ## Usage Guide
 
-Here we detail how SYNOP2BUFR can be used.
+Here we detail how synop2bufr can be used.
 
 To begin, suppose we have some SYNOP data.
 
 > Note: It does not matter whether this SYNOP data is a text file in the local directory or a string, provided the message(s) follow the SYNOP regulations.
 
-In a Python file, we can import the modules of SYNOP2BUFR by:
+In a Python file, we can import the modules of synop2bufr by:
 
 ```
 from synop2bufr import method_name
@@ -58,8 +59,8 @@ ___
 
 The `to_bufr` method can be used in the following way:
 
-```
-to_bufr(SYNOP message)
+```python
+to_bufr(synop_message)
 ```
 
 where, as mentioned before, the input can either be the tac string itself or the directory to the text file containing the SYNOP data.
@@ -70,7 +71,7 @@ This method generates BUFR4 file(s) in a folder called _output-bufr_. The number
 
 Suppose we have a text file named `A_SMRO01YRBK211200_C_EDZW_20220321120500_12524785.txt` containing 23 SYNOP messages. We can convert these to 23 BUFR4 files with the following code:
 
-```
+```python
 from synop2bufr import to_json
 
 to_json("./A_SMRO01YRBK211200_C_EDZW_20220321120500_12524785.txt")
@@ -82,32 +83,38 @@ ___
 
 ### Conversion to a Python dictionary
 
-As mentioned before, this module offers *two* *methods* to obtain the Python dictionary of SYNOP message(s) prior to conversion to BUFR.
+synop2bufr offers two methods to obtain the Python dictionary of SYNOP message(s) prior to conversion to BUFR.
 
 The most simple of which is `convert_to_dict`. This can be used in the following way:
+
+```python
+convert_to_dict(single_synop_message, year, month)
 ```
-convert_to_dict(one SYNOP message, year of message, month of message)
-```
+
 where the SYNOP message must be a string, and the year/month must be an integer. This returns an array containing a single Python dictionary for the decoded message, as well as the number of section 3 and section 4 cloud groups detected[^1].
 
 [^1]: These are the replicated cloud groups of section 3 and section 4 of a SYNOP message. See the [WMO manual on FM-12](https://library.wmo.int/doc_num.php?explnum_id=10235) for more details.
 
-> Note: For this method, the terminating character '=' of the SYNOP message must be omitted.
+> Note: For this method, the terminating character `=` of the SYNOP message must be omitted.
 
-Another and more complex method is `to_json`. This can be used in the following way:
-```
+Another and more complex method is `to_json`. This can be used as follows:
+
+```python
 to_json(SYNOP message)
 ```
+
 where the input is the same as the `to_bufr` method. Just like `convert_to_dict`, this returns an array containing a nested Python dictionary for all of the decoded messages, as well as the number of section 3 and section 4 cloud groups detected.
 
 The main advantage of `to_json` is that it is able to process several SYNOP messages simultaneously to return one nested dictionary for all stations.
 
 Additionally, when a text file name is provided as input, it automatically determines the year/month of the message (and otherwise automatically assigns the current year/month).
 
-> Note: For this method, the terminating character '=' of each SYNOP message must remain in the string.
+> Note: For this method, the terminating character `=` of each SYNOP message must remain in the string.
 
 ### Example
+
 Suppose we have the following SYNOP messages:
+
 ```
 AAXX 21121
 
@@ -117,7 +124,8 @@ AAXX 21121
 ```
 
 We can decode one of the messages, e.g. the former, using `convert_to_dict` as follows:
-```
+
+```python
 from synop2bufr import convert_to_dict
 
 message = "AAXX 21121 
@@ -125,8 +133,10 @@ message = "AAXX 21121
 
 convert_to_dict(message, 2023, 1)
 ```
-which returns (when pretty printed):
-```
+
+which returns (pretty printed):
+
+```json
 [
   {
     "report_type": "AAXX",
@@ -219,7 +229,7 @@ which returns (when pretty printed):
 
 We can decode all of these messages at once using `to_json` as follows:
 
-```
+```python
 from synop2bufr import to_json
 
 messages = """AAXX 21121
@@ -230,8 +240,10 @@ messages = """AAXX 21121
 
 to_json(messages)
 ```
-which returns (when pretty printed):
-```
+
+which returns (pretty printed):
+
+```json
 {
   "15015": [
     {
@@ -413,20 +425,62 @@ which returns (when pretty printed):
 ___
 
 ### Message extraction
-The remaining two methods provided by SYNOP2BUFR are relatively basic and unlikely to be used. These are `message_extract` and `file_extract`, which as mentioned above are used to extract strings ready for conversion into a Python dictionary and subsequently BUFR4 files.
+
+The remaining two methods provided by synop2bufr are relatively basic and unlikely to be used. These are `message_extract` and `file_extract`, which as mentioned above are used to extract strings ready for conversion into a Python dictionary and subsequently BUFR4 files.
 
 One can use `message_extract` in the following way:
-```
+
+```python
 message_extract(SYNOP message string)
 ```
+
 which returns an array of strings, where each string is an individual SYNOP message (ready for `convert_to_dict` for example).
 
 One can use `file_extract` in the following way:
-```
+
+```python
 file_extract(SYNOP message text file directory)
 ```
+
 which returns the same array as `message_extract` would if provided the contents of the file, as well as the year and month determined by the file name.
 
 ---
-## License
-Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements.
+
+## Releasing
+
+```bash
+# create release (x.y.z is the release version)
+vi synop2bufr/__init__.py  # update __version__
+git commit -am 'update release version vx.y.z'
+git push origin main
+git tag -a vx.y.z -m 'tagging release version vx.y.z'
+git push --tags
+
+# upload to PyPI
+rm -fr build dist *.egg-info
+python setup.py sdist bdist_wheel --universal
+twine upload dist/*
+
+# publish release on GitHub (https://github.com/wmo-im/synop2bufr/releases/new)
+
+# bump version back to dev
+vi synop2bufr/__init__.py  # update __version__
+git commit -am 'back to dev'
+git push origin main
+```
+## Documentation
+
+The full documentation for synop2bufr can be found at [https://synop2bufr.readthedocs.io](https://synop2bufr.readthedocs.io), including sample files.
+
+### Code Conventions
+
+* [PEP8](https://www.python.org/dev/peps/pep-0008)
+
+### Bugs and Issues
+
+All bugs, enhancements and issues are managed on [GitHub](https://github.com/wmo-im/synop2bufr/issues).
+
+## Contact
+
+* [David Berry](https://github.com/david-i-berry)
+* [Rory Burke](https://github.com/RoryPTB)

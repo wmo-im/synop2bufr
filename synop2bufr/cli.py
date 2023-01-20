@@ -18,10 +18,12 @@
 # under the License.
 #
 ###############################################################################
-import click
+
 import logging
 import os.path
 import sys
+
+import click
 
 from synop2bufr import __version__, transform as transform_synop
 
@@ -55,23 +57,22 @@ def cli():
 
 @click.command()
 @click.pass_context
-@click.option('--input', 'input', required=True,
-              type=click.File(errors="ignore"),
-              help="Name/directory of the SYNOP TAC file to convert to BUFR, or alternatively a SYNOP message itself.")  # noqa
+@click.argument('synop_file', type=click.File(errors="ignore"))
 @click.option('--metadata', 'metadata', required=True,
               type=click.File(errors="ignore"),
-              help="Name/directory of the station metadata.")
+              help="Name/directory of the station metadata")
 @click.option('--output-dir', 'output_dir', required=True,
-              help="Directory for the output BUFR files.")
+              help="Directory for the output BUFR files")
 @click.option('--year', 'year', required=True,
-              help="Year that the example_data correspond to.")
+              help="Year that the data corresponds to")
 @click.option('--month', 'month', required=True,
-              help="Month that the example_data correspond to.")
+              help="Month that the data corresponds to")
 @cli_option_verbosity
-def transform(ctx, input, metadata, output_dir, year, month, verbosity):
+def transform(ctx, synop_file, metadata, output_dir, year, month, verbosity):
 
     try:
-        result = transform_synop(input.read(), metadata.read(), year, month)
+        result = transform_synop(synop_file.read(), metadata.read(),
+                                 year, month)
     except Exception as e:
         raise click.ClickException(e)
 

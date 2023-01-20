@@ -18,6 +18,7 @@
 # under the License.
 #
 ###############################################################################
+
 import csv
 from copy import deepcopy
 from datetime import (date, datetime, timezone)
@@ -27,9 +28,10 @@ import logging
 import math
 import os
 import re
+from typing import Iterator, Tuple
 
-from pymetdecoder import synop
 from csv2bufr import BUFRMessage
+from pymetdecoder import synop
 
 __version__ = '0.1.dev0'
 
@@ -80,22 +82,21 @@ with open(MAPPINGS) as fh:
     _mapping = json.load(fh)
 
 
-# TODO, rename convert_to_dict to parse_synop (I feel convert_to_dict is too
-# generic)
 def convert_to_dict(message: str, year: int, month: int) -> dict:
     """
     This function parses a SYNOP message, storing and returning the
-    example_data as a python dictionary.
+    data as a Python dictionary.
 
     :param message: String containing the SYNOP message to be decoded
     :param year: Int value of the corresponding year for the SYNOP messsage
     :param month: Int value of the corresponding month for the SYNOP messsage
 
+    :returns: `dict` of parsed SYNOP message
     """
 
     # Get the full output decoded message from the Pymetdecoder package
     try:
-        decode = synop.SYNOP().decode(message)
+        decoded = synop.SYNOP().decode(message)
     except Exception as e:
         LOGGER.error("Unable to decode the SYNOP message.")
         raise e
@@ -110,22 +111,22 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
     output['year'] = year
     output['month'] = month
 
-    if 'obs_time' in decode.keys():
-        output['day'] = decode['obs_time']['day']['value']
-        output['hour'] = decode['obs_time']['hour']['value']
+    if 'obs_time' in decoded:
+        output['day'] = decoded['obs_time']['day']['value']
+        output['hour'] = decoded['obs_time']['hour']['value']
 
     # The minute will be 00 unless specified by exact observation time
-    if 'exact_obs_time' in decode.keys():
-        output['minute'] = decode['exact_obs_time']['minute']['value']
+    if 'exact_obs_time' in decoded:
+        output['minute'] = decoded['exact_obs_time']['minute']['value']
         # Overwrite the hour, because the actual observation may be from
         # the hour before but has been rounded in the YYGGiw group
-        output['hour'] = decode['exact_obs_time']['hour']['value']
+        output['hour'] = decoded['exact_obs_time']['hour']['value']
     else:
         output['minute'] = 0
 
     # Translate wind instrument flag from the SYNOP code to the BUFR code
-    if 'wind_indicator' in decode.keys():
-        iw = decode['wind_indicator']['value']
+    if 'wind_indicator' in decoded:
+        iw = decoded['wind_indicator']['value']
 
         # In this conversion, we convert bit number to a value (see code table
         # 0 02 002)  # noq
@@ -146,8 +147,8 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
 
     output['wind_indicator'] = iw_translated
 
-    if 'station_id' in decode.keys():
-        tsi = decode['station_id']['value']
+    if 'station_id' in decoded:
+        tsi = decoded['station_id']['value']
         output['station_id'] = tsi
         output['block_no'] = tsi[0:2]
         output['station_no'] = tsi[2:5]
@@ -155,8 +156,8 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
     # ! Removed region and precipitation indicator as they are redundant
 
     # We translate this station type flag from the SYNOP code to the BUFR code
-    if 'weather_indicator' in decode.keys():
-        ix = decode['weather_indicator']['value']
+    if 'weather_indicator' in decoded:
+        ix = decoded['weather_indicator']['value']
         if ix <= 3:
             ix_translated = 1  # Manned station
         elif ix == 4:
@@ -173,19 +174,19 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
     # Lowest cloud base is already given in metres, but we specifically select
     # the minimum value  # noq
     # NOTE: By B/C1.4.4.4 the precision of this value is in tens of metres
-    if 'lowest_cloud_base' in decode.keys() and \
-            decode['lowest_cloud_base'] is not None:
+    if 'lowest_cloud_base' in decoded and \
+            decoded['lowest_cloud_base'] is not None:
         output['lowest_cloud_base'] = \
-            round(decode['lowest_cloud_base']['min'], -1)
+            round(decoded['lowest_cloud_base']['min'], -1)
 
     # Visibility is already given in metres
-    if 'visibility' in decode.keys():
-        output['visibility'] = decode['visibility']['value']
+    if 'visibility' in decoded:
+        output['visibility'] = decoded['visibility']['value']
 
     # Cloud cover is given in oktas, which we convert to a percentage
     #  NOTE: By B/C10.4.4.1 this percentage is always rounded up
-    if 'cloud_cover' in decode.keys():
-        N_oktas = decode['cloud_cover']['_code']
+    if 'cloud_cover' in decoded:
+        N_oktas = decoded['cloud_cover']['_code']
         # If the cloud cover is 9 oktas, this means the sky was obscured and
         # we keep the value as None
         if N_oktas == 9:
@@ -195,23 +196,23 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
             output['cloud_cover'] = N_percentage
 
     # Wind direction is already in degrees
-    if 'surface_wind' in decode.keys():
+    if 'surface_wind' in decoded:
         # See B/C1.10.5.3
         # NOTE: Every time period in the following code shall be a negative number,  # noqa
         # to indicate measurements have been taken up until the present.
         output['time_significance'] = 2
         output['wind_time_period'] = -10
 
-        if decode['surface_wind']['direction'] is not None:
+        if decoded['surface_wind']['direction'] is not None:
             output['wind_direction'] = \
-                decode['surface_wind']['direction']['value']
+                decoded['surface_wind']['direction']['value']
 
         # Wind speed in units specified by 'wind_indicator', convert to m/s
-        if decode['surface_wind']['speed'] is not None:
-            ff = decode['surface_wind']['speed']['value']
+        if decoded['surface_wind']['speed'] is not None:
+            ff = decoded['surface_wind']['speed']['value']
 
             # Find the units
-            ff_unit = decode['wind_indicator']['unit']
+            ff_unit = decoded['wind_indicator']['unit']
 
             # If units are knots instead of m/s, convert it to knots
             if ff_unit == 'KT':
@@ -220,16 +221,16 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
             output['wind_speed'] = ff
 
     # Temperatures are given in Celsius, convert to kelvin and round to 2 dp
-    if 'air_temperature' in decode.keys():
+    if 'air_temperature' in decoded:
         output['air_temperature'] = round(
-            decode['air_temperature']['value'] + 273.15, 2)
-    if 'dewpoint_temperature' in decode.keys():
+            decoded['air_temperature']['value'] + 273.15, 2)
+    if 'dewpoint_temperature' in decoded:
         output['dewpoint_temperature'] = round(
-            decode['dewpoint_temperature']['value'] + 273.15, 2)
+            decoded['dewpoint_temperature']['value'] + 273.15, 2)
 
     # RH is already given in %
-    if 'relative_humidity' in decode.keys():
-        output['relative_humidity'] = decode['relative_humidity']
+    if 'relative_humidity' in decoded:
+        output['relative_humidity'] = decoded['relative_humidity']
     else:
         # if RH is missing estimate from air temperature and dew point
         # temperature
@@ -254,59 +255,59 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
 
     # Pressure is given in hPa, which we convert to Pa. By B/C 1.3.1,
     # pressure has precision in tens of Pa
-    if 'station_pressure' in decode.keys():
+    if 'station_pressure' in decoded:
         output['station_pressure'] = round(
-            decode['station_pressure']['value'] * 100, -1)
+            decoded['station_pressure']['value'] * 100, -1)
 
     #  Similar to above. By B/C1.3.2, pressure has precision in tens of Pa
-    if 'sea_level_pressure' in decode.keys():
+    if 'sea_level_pressure' in decoded:
         output['sea_level_pressure'] = round(
-            decode['sea_level_pressure']['value'] * 100, -1)
+            decoded['sea_level_pressure']['value'] * 100, -1)
 
-    if 'geopotential' in decode.keys():
+    if 'geopotential' in decoded:
         output['isobaric_surface'] = round(
-            decode['geopotential']['surface']['value'] * 100, 1)
+            decoded['geopotential']['surface']['value'] * 100, 1)
         output['geopotential_height'] = \
-            decode['geopotential']['height']['value']
+            decoded['geopotential']['height']['value']
 
-    if 'pressure_tendency' in decode.keys():
+    if 'pressure_tendency' in decoded:
         #  By B/C1.3.3, pressure has precision in tens of Pa
         output['3hr_pressure_change'] = round(
-            decode['pressure_tendency']['change']['value'] * 100, -1)
+            decoded['pressure_tendency']['change']['value'] * 100, -1)
         output['pressure_tendency_characteristic'] = \
-            decode['pressure_tendency']['tendency']['value']
+            decoded['pressure_tendency']['tendency']['value']
     else:
         output['pressure_tendency_characteristic'] = 15  # Missing value
 
     # Precipitation is given in mm, which is equal to kg/m^2 of rain
-    if 'precipitation_s1' in decode.keys():
+    if 'precipitation_s1' in decoded:
         # NOTE: When the precipitation measurement RRR has code 990, this
         # represents a trace amount of rain
         # (<0.01 inches), which pymetdecoder records as 0. I agree with
         # this choice, and so no change has been made.
         output['precipitation_s1'] = \
-            decode['precipitation_s1']['amount']['value']
+            decoded['precipitation_s1']['amount']['value']
         output['ps1_time_period'] = -1 * \
-            decode['precipitation_s1']['time_before_obs']['value']
+            decoded['precipitation_s1']['time_before_obs']['value']
 
     # The present and past weather SYNOP codes align with that of BUFR apart
     # from missing values
-    if 'present_weather' in decode.keys():
-        output['present_weather'] = decode['present_weather']['value']
+    if 'present_weather' in decoded:
+        output['present_weather'] = decoded['present_weather']['value']
     else:
         output['present_weather'] = 511  # Missing value
 
-    if 'past_weather' in decode.keys():
+    if 'past_weather' in decoded:
 
-        if decode['past_weather']['past_weather_1'] is not None:
+        if decoded['past_weather']['past_weather_1'] is not None:
             output['past_weather_1'] = \
-                decode['past_weather']['past_weather_1']['value']
+                decoded['past_weather']['past_weather_1']['value']
         else:
             output['past_weather_1'] = 31  # Missing value
 
-        if decode['past_weather']['past_weather_2'] is not None:
+        if decoded['past_weather']['past_weather_2'] is not None:
             output['past_weather_2'] = \
-                decode['past_weather']['past_weather_2']['value']
+                decoded['past_weather']['past_weather_2']['value']
 
         else:
             output['past_weather_2'] = 31  # Missing value
@@ -331,8 +332,8 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
 
     # We translate these cloud type flags from the SYNOP codes to the
     # BUFR codes
-    if 'cloud_types' in decode.keys():
-        Cl = decode['cloud_types']['low_cloud_type']
+    if 'cloud_types' in decoded:
+        Cl = decoded['cloud_types']['low_cloud_type']
         if Cl is not None:
             Cl = Cl['value']
             Cl_translated = Cl + 30
@@ -340,7 +341,7 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
             Cl_translated = None
         output['low_cloud_type'] = Cl_translated
 
-        Cm = decode['cloud_types']['middle_cloud_type']
+        Cm = decoded['cloud_types']['middle_cloud_type']
         if Cm is not None:
             Cm = Cm['value']
             Cm_translated = Cm + 20
@@ -348,7 +349,7 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
             Cm_translated = None
         output['middle_cloud_type'] = Cm_translated
 
-        Ch = decode['cloud_types']['high_cloud_type']
+        Ch = decoded['cloud_types']['high_cloud_type']
         if Ch is not None:
             Ch = Ch['value']
             Ch_translated = Ch + 10
@@ -356,10 +357,10 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
             Ch_translated = None
         output['high_cloud_type'] = Ch_translated
 
-        if 'low_cloud_amount' in decode['cloud_types'].keys():
+        if 'low_cloud_amount' in decoded['cloud_types']:
             # Low cloud amount is given in oktas, and by B/C1.4.4.3.1 it
             # stays that way for BUFR
-            N_oktas = decode['cloud_types']['low_cloud_amount']['value']
+            N_oktas = decoded['cloud_types']['low_cloud_amount']['value']
             # If the cloud cover is 9 oktas, this means the sky was obscured
             # and we keep the value as None
             if N_oktas == 9:
@@ -370,10 +371,10 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
                 output['cloud_vs_s1'] = 7
                 output['cloud_amount_s1'] = N_oktas
 
-        elif 'middle_cloud_amount' in decode['cloud_types'].keys():
+        elif 'middle_cloud_amount' in decoded['cloud_types']:
             # Middle cloud amount is given in oktas, and by B/C1.4.4.3.1 it
             # stays that way for BUFR
-            N_oktas = decode['cloud_types']['middle_cloud_amount']['value']
+            N_oktas = decoded['cloud_types']['middle_cloud_amount']['value']
             # If the cloud cover is 9 oktas, this means the sky was obscured
             # and we keep the value as None
             if N_oktas == 9:
@@ -387,7 +388,7 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
 
         # According to B/C1.4.4.3.1, if only high clouds present, cloud amount
         # and significance code will be set to 0
-        elif decode['cloud_types']['high_cloud_type'] is not None:
+        elif decoded['cloud_types']['high_cloud_type'] is not None:
             output['cloud_vs_s1'] = 0
             output['cloud_amount_s1'] = 0
 
@@ -422,47 +423,46 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
 
     #  Group 1 1snTxTxTx - gives maximum temperature over a time period
     # decided by the region
-    if ('maximum_temperature' in decode.keys() and
-            decode['maximum_temperature'] is not None):
+    if ('maximum_temperature' in decoded and
+            decoded['maximum_temperature'] is not None):
         #  Convert to Kelvin
         output['maximum_temperature'] = round(
-            decode['maximum_temperature']['value'] + 273.15, 2)
+            decoded['maximum_temperature']['value'] + 273.15, 2)
 
     #  Group 2 2snTnTnTn - gives minimum temperature over a time period
     # decided by the region
-    if ('minimum_temperature' in decode.keys() and
-            decode['minimum_temperature'] is not None):
+    if ('minimum_temperature' in decoded and
+            decoded['minimum_temperature'] is not None):
         #  Convert to Kelvin
         output['minimum_temperature'] = round(
-            decode['minimum_temperature']['value'] + 273.15, 2)
+            decoded['minimum_temperature']['value'] + 273.15, 2)
     #  Group 3 3Ejjj
     # NOTE: According to SYNOP manual 12.4.5, the group is
     # developed regionally.
     # This regional difference is as follows:
     # It is either omitted, or it takes form 3EsnTgTg, where
     # Tg is the ground temperature
-    if 'ground_state' in decode.keys():
+    if 'ground_state' in decoded:
 
-        if decode['ground_state']['state'] is not None:
-            output['ground_state'] = decode['ground_state']['state']['value']
-            print(decode['ground_state'])
+        if decoded['ground_state']['state'] is not None:
+            output['ground_state'] = decoded['ground_state']['state']['value']
         else:
             # By B/C1 a missing value has code 31
             output['ground_state'] = 31
 
-        if decode['ground_state']['temperature'] is not None:
+        if decoded['ground_state']['temperature'] is not None:
             #  Convert to Kelvin
             output['ground_temperature'] = round(
-                decode['ground_state']['temperature']['value'] + 273.15, 2)
+                decoded['ground_state']['temperature']['value'] + 273.15, 2)
 
     #  Group 4 4E'sss - gives state of the ground with snow, and the snow
     # depth (not regional like group 3 is)
-    if 'ground_state_snow' in decode.keys():
+    if 'ground_state_snow' in decoded:
 
-        if decode['ground_state_snow']['state'] is not None:
+        if decoded['ground_state_snow']['state'] is not None:
             # We translate the snow depth flags from the SYNOP codes to the
             # BUFR codes
-            E = decode['ground_state_snow']['state']['value']
+            E = decoded['ground_state_snow']['state']['value']
             E_translated = E + 10
             output['ground_state'] = E_translated
 
@@ -470,7 +470,7 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
             output['ground_state'] = 31
 
         # Snow depth is given in cm but should be recorded in m
-        snow_depth = decode['ground_state_snow']['depth']['depth']
+        snow_depth = decoded['ground_state_snow']['depth']['depth']
         output['snow_depth'] = snow_depth * 0.01
 
     #  We now look at group 5, 5j1j2j3j4, which can take many different forms
@@ -478,52 +478,52 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
     #  supplementary groups for radiation measurements
 
     # Evaporation 5EEEiE
-    if 'evapotranspiration' in decode.keys():
+    if 'evapotranspiration' in decoded:
 
         # Evapotranspiration is given in mm, which is equal to kg/m^2 for rain
         output['evapotranspiration'] = \
-            decode['evapotranspiration']['amount']['value']
+            decoded['evapotranspiration']['amount']['value']
 
-        if decode['evapotranspiration']['type'] is not None:
+        if decoded['evapotranspiration']['type'] is not None:
             output['evaporation_instrument'] = \
-                decode['evapotranspiration']['type']['_code']
+                decoded['evapotranspiration']['type']['_code']
 
         else:
             # Missing value
             output['evaporation_instrument'] = 15
 
     # Temperature change 54g0sndT
-    if 'temperature_change' in decode.keys():
+    if 'temperature_change' in decoded:
 
-        if decode['temperature_change']['time_before_obs'] is not None:
+        if decoded['temperature_change']['time_before_obs'] is not None:
             output['tc_time_period'] = -1 * \
-                decode['temperature_change']['time_before_obs']['value']
+                decoded['temperature_change']['time_before_obs']['value']
 
-        if decode['temperature_change']['change'] is not None:
+        if decoded['temperature_change']['change'] is not None:
             # We do not correct this measurement, as the temperature change is
             # the same in both degC and K
             output['temperature_change'] = \
-                decode['temperature_change']['change']['value']
+                decoded['temperature_change']['change']['value']
 
     # Sunshine amount 55SSS (24hrs) and 553SS (1hr)
-    if ('sunshine' in decode.keys() and
-            decode['sunshine']['amount'] is not None):
+    if ('sunshine' in decoded and
+            decoded['sunshine']['amount'] is not None):
 
         # The time period remains in hours
-        sun_time = decode['sunshine']['duration']['value']
+        sun_time = decoded['sunshine']['duration']['value']
 
         if sun_time == 1:
             # Sunshine amount should be given in minutes
             output['sunshine_amount_1hr'] = \
-                decode['sunshine']['amount']['value'] * 60
+                decoded['sunshine']['amount']['value'] * 60
 
         elif sun_time == 24:
             # Sunshine amount should be
             # given in minutes
             output['sunshine_amount_24hr'] = \
-                decode['sunshine']['amount']['value'] * 60
+                decoded['sunshine']['amount']['value'] * 60
 
-    # Cloud drift example_data 56DLDMDH
+    # Cloud drift data 56DLDMDH
     #  By B/C1.6.2 we must convert the direction to a degree bearing
     def to_bearing(direction):
         # Between NE and NW
@@ -533,9 +533,9 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
         if direction == 8:
             return 0
 
-    if 'cloud_drift_direction' in decode.keys():
-        if decode['cloud_drift_direction']['low'] is not None:
-            low_dir = decode['cloud_drift_direction']['low']['_code']
+    if 'cloud_drift_direction' in decoded:
+        if decoded['cloud_drift_direction']['low'] is not None:
+            low_dir = decoded['cloud_drift_direction']['low']['_code']
 
             # NOTE: If direction code is 0, the clouds are stationary or
             # there are no clouds.
@@ -545,27 +545,27 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
             if low_dir > 0 and low_dir < 9:
                 output['low_cloud_drift_direction'] = to_bearing(low_dir)
 
-        if decode['cloud_drift_direction']['middle'] is not None:
-            middle_dir = decode['cloud_drift_direction']['middle']['_code']
+        if decoded['cloud_drift_direction']['middle'] is not None:
+            middle_dir = decoded['cloud_drift_direction']['middle']['_code']
             if middle_dir > 0 and middle_dir < 9:
                 output['middle_cloud_drift_direction'] = to_bearing(middle_dir)
 
-        if decode['cloud_drift_direction']['high'] is not None:
-            high_dir = decode['cloud_drift_direction']['high']['_code']
+        if decoded['cloud_drift_direction']['high'] is not None:
+            high_dir = decoded['cloud_drift_direction']['high']['_code']
             if high_dir > 0 and high_dir < 9:
                 output['high_cloud_drift_direction'] = to_bearing(high_dir)
 
     # Direction and elevation angle of the clouds 57CDaeC
-    if 'cloud_elevation' in decode.keys():
-        if decode['cloud_elevation']['genus'] is not None:
+    if 'cloud_elevation' in decoded:
+        if decoded['cloud_elevation']['genus'] is not None:
             output['e_cloud_genus'] = \
-                decode['cloud_elevation']['genus']['_code']
+                decoded['cloud_elevation']['genus']['_code']
         else:
             # Missing value
             output['e_cloud_genus'] = 63
 
-        if decode['cloud_elevation']['direction'] is not None:
-            e_dir = decode['cloud_elevation']['direction']['_code']
+        if decoded['cloud_elevation']['direction'] is not None:
+            e_dir = decoded['cloud_elevation']['direction']['_code']
 
             # NOTE: If direction code is 0, the clouds are stationary or there
             # are no clouds.
@@ -576,20 +576,20 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
                 # We reuse the to_bearing function from above
                 output['e_cloud_direction'] = to_bearing(e_dir)
 
-        if decode['cloud_elevation']['elevation'] is not None:
-            if decode['cloud_elevation']['elevation']['value'] is not None:
+        if decoded['cloud_elevation']['elevation'] is not None:
+            if decoded['cloud_elevation']['elevation']['value'] is not None:
                 # The elevation is already given in degrees
                 output['e_cloud_elevation'] = \
-                    decode['cloud_elevation']['elevation']['value']
+                    decoded['cloud_elevation']['elevation']['value']
 
     # Positive 58p24p24p24 or negative 59p24p24p24 changes in surface pressure
     # over 24hrs
-    if 'pressure_change' in decode.keys():
-        if decode['pressure_change'] is not None:
+    if 'pressure_change' in decoded:
+        if decoded['pressure_change'] is not None:
             #  SYNOP has units hPa. By B/C1.3.4, pressure change is given in
             # tens of Pa
             output['24hr_pressure_change'] = round(
-                decode['pressure_change']['value']*100, -1)
+                decoded['pressure_change']['value']*100, -1)
 
     # Radiation supplementary information - the following radiation types are:
     # 1) Positive net radiation
@@ -605,9 +605,9 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
     # In either case, B/C1.12.2 requires that all radiation measurements
     # are given in J/m^2. We convert this here.
 
-    if 'radiation' in decode.keys():
+    if 'radiation' in decoded:
 
-        rad_dict = decode['radiation']
+        rad_dict = decoded['radiation']
 
         # Create a function to do the appropriate conversion depending
         # on time period
@@ -619,7 +619,7 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
                 # 1 J/cm^2 = 10000 J/m^2
                 return 10000 * rad
 
-        if 'positive_net' in rad_dict.keys():
+        if 'positive_net' in rad_dict:
             if rad_dict['positive_net']['value'] is not None:
                 rad = rad_dict['positive_net']['value']
                 time = rad_dict['positive_net']['time_before_obs']['value']
@@ -635,7 +635,7 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
                     output['net_radiation_24hr'] = \
                         round(rad_convert(rad, time), -3)
 
-        if 'negative_net' in rad_dict.keys():
+        if 'negative_net' in rad_dict:
             if rad_dict['negative_net']['value'] is not None:
                 rad = rad_dict['negative_net']['value']
                 time = rad_dict['negative_net']['time_before_obs']['value']
@@ -651,7 +651,7 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
                     output['net_radiation_24hr'] = \
                         -1*round(rad_convert(rad, time), -3)
 
-        if 'global_solar' in rad_dict.keys():
+        if 'global_solar' in rad_dict:
             if rad_dict['global_solar']['value'] is not None:
                 rad = rad_dict['global_solar']['value']
                 time = rad_dict['global_solar']['time_before_obs']['value']
@@ -666,7 +666,7 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
                     output['global_solar_radiation_24hr'] = \
                         round(rad_convert(rad, time), -2)
 
-        if 'diffused_solar' in rad_dict.keys():
+        if 'diffused_solar' in rad_dict:
             if rad_dict['diffused_solar']['value'] is not None:
                 rad = rad_dict['diffused_solar']['value']
                 time = rad_dict['diffused_solar']['time_before_obs']['value']
@@ -683,7 +683,7 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
                     output['diffuse_solar_radiation_24hr'] = \
                         round(rad_convert(rad, time), -2)
 
-        if 'downward_long_wave' in rad_dict.keys():
+        if 'downward_long_wave' in rad_dict:
             if rad_dict['downward_long_wave']['value'] is not None:
                 rad = rad_dict['downward_long_wave']['value']
                 time = \
@@ -700,7 +700,7 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
                     output['long_wave_radiation_24hr'] = \
                         round(rad_convert(rad, time), -4)
 
-        if 'upward_long_wave' in rad_dict.keys():
+        if 'upward_long_wave' in rad_dict:
             if rad_dict['upward_long_wave']['value'] is not None:
                 rad = rad_dict['upward_long_wave']['value']
                 time = rad_dict['upward_long_wave']['time_before_obs']['value']
@@ -716,7 +716,7 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
                     output['long_wave_radiation_24hr'] = \
                         -1*round(rad_convert(rad, time), -4)
 
-        if 'short_wave' in rad_dict.keys():
+        if 'short_wave' in rad_dict:
             if rad_dict['short_wave']['value'] is not None:
                 rad = rad_dict['short_wave']['value']
                 time = rad_dict['short_wave']['time_before_obs']['value']
@@ -732,7 +732,7 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
                     output['short_wave_radiation_24hr'] = \
                         round(rad_convert(rad, time), -3)
 
-        if 'direct_solar' in rad_dict.keys():
+        if 'direct_solar' in rad_dict:
             if rad_dict['direct_solar']['value'] is not None:
                 rad = rad_dict['direct_solar']['value']
                 time = rad_dict['direct_solar']['time_before_obs']['value']
@@ -749,22 +749,22 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
     #  Group 6 6RRRtR - this is the same group as that in section 1, but over
     # a different time period tR
     #  (which is not a multiple of 6 hours as it is in section 1)
-    if 'precipitation_s3' in decode.keys():
+    if 'precipitation_s3' in decoded:
         # In SYNOP it is given in mm, and in BUFR it is required to be
         # in kg/m^2 (1mm = 1kg/m^2 for water)
         output['precipitation_s3'] = \
-            decode['precipitation_s3']['amount']['value']
+            decoded['precipitation_s3']['amount']['value']
         # The time period is expected to be in hours
         output['ps3_time_period'] = -1 * \
-            decode['precipitation_s3']['time_before_obs']['value']
+            decoded['precipitation_s3']['time_before_obs']['value']
 
     #  Group 7 7R24R24R24R24 - this group is the same as group 6, but
     # over a 24 hour time period
-    if 'precipitation_24h' in decode.keys():
+    if 'precipitation_24h' in decoded:
         # In SYNOP it is given in mm, and in BUFR it is required to be
         # in kg/m^2 (1mm = 1kg/m^2 for water)
         output['precipitation_24h'] = \
-            decode['precipitation_24h']['amount']['value']
+            decoded['precipitation_24h']['amount']['value']
 
     #  Group 8 8NsChshs - information about a layer or mass of cloud.
     #  This group can be repeated for up to 4 cloud genuses that are witnessed,
@@ -773,10 +773,10 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
     # Create number of s3 group 8 clouds variable, in case there is no group 8
     num_s3_clouds = 0
 
-    if 'cloud_layer' in decode.keys():
+    if 'cloud_layer' in decoded:
 
         # Name the array of 8NsChshs groups
-        genus_array = decode['cloud_layer']
+        genus_array = decoded['cloud_layer']
 
         # Get the number of 8NsChshs groups in the SYNOP message
         num_s3_clouds = len(genus_array)
@@ -847,13 +847,13 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
     #  wind gust speed for region VI (groups 910fmfm and 911fxfx).
     #  These are given and required to be in m/s.
 
-    if 'highest_gust' in decode.keys():
-        if decode['highest_gust']['gust_1']['speed'] is not None:
+    if 'highest_gust' in decoded:
+        if decoded['highest_gust']['gust_1']['speed'] is not None:
             output['highest_gust_1'] = \
-                decode['highest_gust']['gust_1']['speed']['value']
-        if decode['highest_gust']['gust_2']['speed'] is not None:
+                decoded['highest_gust']['gust_1']['speed']['value']
+        if decoded['highest_gust']['gust_2']['speed'] is not None:
             output['highest_gust_2'] = \
-                decode['highest_gust']['gust_2']['speed']['value']
+                decoded['highest_gust']['gust_2']['speed']['value']
 
     #  Regulation 6/12.12.2 in the WMO regional guide tells us that the
     #  1st max gust speed has fixed time period 10 minutes, and the 2nd has
@@ -881,10 +881,10 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
     # Create number of s4 clouds variable, in case there are no s4 groups
     num_s4_clouds = 0
 
-    if 'section4' in decode.keys():
+    if 'section4' in decoded:
 
         # Name the array of section 4 items
-        genus_array = decode['section4']
+        genus_array = decoded['section4']
 
         # Get the number of section 4 groups in the SYNOP message
         num_s4_clouds = len(genus_array)
@@ -929,35 +929,38 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
     return output, num_s3_clouds, num_s4_clouds
 
 
-def file_extract(file):
-    """This function extracts the contents of the file and the date of the file
-
-    Args:
-        file (str): The file directory or file name of the SYNOP message.
+def file_extract(file_: str) -> Tuple[list, int, int]:
     """
-    # Open and read the file, stripping any new lines
-    try:
-        with open(file, "r") as fp:
-            data = fp.read()
-    except Exception:
-        return "Error: The file path is incorrect."
+    Extracts the contents of a file and the date of the file
 
-    # Obtain the year and month of the example_data from the file name
-    file_name = os.path.basename(file)
-    file_year, file_month = get_date_from_filename(file_name)
+    :param file_: `str` of file
+
+    :returns: `tuple` of messages, year, month
+    """
+
+    # Open and read the file, stripping any new lines
+    with open(file_) as fh:
+        data = fh.read()
+
+    # Obtain the year and month of the data from the file name
+    filename = os.path.basename(file_)
+    year, month = get_date_from_filename(filename)
 
     # Obtain the individual SYNOP messages from the file contents
     messages = message_extract(data)
 
     # Return the list of messages and the date of the file
-    return messages, file_year, file_month
+    return messages, year, month
 
 
-def message_extract(data):
-    """This function separates the SYNOP tac and returns the individual SYNOP
+def message_extract(data: str) -> list:
+    """
+    Separates the SYNOP tac and returns the individual SYNOP
     messages, ready for conversion
-    Args:
-        data (str): The SYNOP tac.
+
+    :param data: The SYNOP tac.
+
+    :returns: `list` of messages
     """
 
     # Check for abbreviated header line TTAAii etc.
@@ -999,16 +1002,15 @@ def message_extract(data):
     return messages
 
 
-def get_date_from_filename(name):
-    """This function checks whether the input file name conforms to
-        the standards, and if so returns the datetime of the file, otherwise
-        defaults to returning the current year and month.
+def get_date_from_filename(name: str) -> Tuple[int, int]:
+    """
+    checks whether the input file name conforms to
+    the standards, and if so returns the datetime of the file, otherwise
+    defaults to returning the current year and month.
 
-    Args:
-        name (str): The file path basename.
+    :param name: `str` of filepath
 
-    Returns:
-        datetime: The datetime of the file.
+    :returns: `list` of year and month of the file
     """
 
     # File format is:
@@ -1024,7 +1026,6 @@ def get_date_from_filename(name):
         year = d.year
         month = d.month
         return year, month
-
     except ValueError:
         LOGGER.error(
             f"""File {name} is in wrong file format. The current year and month
@@ -1035,20 +1036,43 @@ def get_date_from_filename(name):
         return year, month
 
 
-def extract_individual_synop(data):
+def extract_individual_synop(data: str) -> list:
+    """
+    Extract messages from a SYNOP
+
+    :param data: `str` of data
+
+    :returns: `list` of messages
+    """
+
     return message_extract(data)
 
 
-def parse_synop(data, year, month):
+def parse_synop(data: str, year: int, month: int) -> dict:
+    """
+    Parse a SYNOP into a dict
+
+    :param data: `str` of data
+    :param year: year (`int`)
+    :param month: month (`int`)
+
+    :returns: `dict` of data
+    """
+
     return convert_to_dict(data, year, month)
 
 
-def transform(data: str, metadata: str, year: int, month: int):
+def transform(data: str, metadata: str, year: int,
+              month: int) -> Iterator[dict]:
     """
-    Function to convert SYNOP encoded observations to BUFR.
+    Convert SYNOP encoded observations to BUFR
 
-    :param data: String containing the example_data to encode
+    :param data: String containing the data to encode
     :param metadata: String containing CSV encoded metadata
+    :param year: year (`int`)
+    :param month: month (`int`)
+
+    :returns: iterator
     """
 
     # ===================
@@ -1093,7 +1117,7 @@ def transform(data: str, metadata: str, year: int, month: int):
         # replications
         mapping = deepcopy(_mapping)
 
-        # parse example_data to dictionary and get number of section 3 and 4
+        # parse data to dictionary and get number of section 3 and 4
         # clouds
         try:
             msg, num_s3_clouds, num_s4_clouds = parse_synop(message, year, month)  # noqa
@@ -1116,7 +1140,7 @@ def transform(data: str, metadata: str, year: int, month: int):
         longitude = metadata_dict[wsi]["longitude"]
         station_height = metadata_dict[wsi]["elevation"]
 
-        # add these values to the example_data dictionary
+        # add these values to the data dictionary
         msg['_wsi_series'] = wsi_series
         msg['_wsi_issuer'] = wsi_issuer
         msg['_wsi_issue_number'] = wsi_issue_number
@@ -1140,13 +1164,13 @@ def transform(data: str, metadata: str, year: int, month: int):
             s3_mappings = {
                 {"eccodes_key": f"""#{idx+8}
                  #verticalSignificanceSurfaceObservations""",
-                 "value": f"example_data:vs_s3_{idx+1}"},
+                 "value": f"data:vs_s3_{idx+1}"},
                 {"eccodes_key": f"#{idx+3}#cloudAmount",
-                 "value": f"example_data:cloud_amount_s3_{idx+1}"},
+                 "value": f"data:cloud_amount_s3_{idx+1}"},
                 {"eccodes_key": f"#{idx+5}#cloudType",
-                 "value": f"example_data:cloud_genus_s3_{idx+1}"},
+                 "value": f"data:cloud_genus_s3_{idx+1}"},
                 {"eccodes_key": f"#{idx+2}#heightOfBaseOfCloud",
-                 "value": f"example_data:cloud_height_s3_{idx+1}"},
+                 "value": f"data:cloud_height_s3_{idx+1}"},
             }
         mapping.update(s3_mappings)
 
@@ -1172,17 +1196,17 @@ def transform(data: str, metadata: str, year: int, month: int):
                  #verticalSignificanceSurfaceObservations""",
                  "value": f"const:{vs_s4}"},
                 {"eccodes_key": f"#{idx+num_s3_clouds+3}#cloudAmount",
-                 "value": f"example_data:cloud_amount_s4_{idx+1}"},
+                 "value": f"data:cloud_amount_s4_{idx+1}"},
                 {"eccodes_key": f"#{idx+num_s3_clouds+5}#cloudType",
-                 "value": f"example_data:cloud_genus_s4_{idx+1}"},
+                 "value": f"data:cloud_genus_s4_{idx+1}"},
                 {"eccodes_key": f"#{idx+1}#heightOfTopOfCloud",
-                 "value": f"example_data:cloud_height_s4_{idx+1}"},
+                 "value": f"data:cloud_height_s4_{idx+1}"},
                 {"eccodes_key": f"#{idx+1}#cloudTopDescription",
-                 "value": f"example_data:cloud_top_s4_{idx+1}"}
+                 "value": f"data:cloud_top_s4_{idx+1}"}
             }
         mapping.update(s4_mappings)
 
-        # At this point we have a dictionary for the example_data, a
+        # At this point we have a dictionary for the data, a
         # dictionary of the mappings and the metadata
         # The last step is to convert to BUFR.
         unexpanded_descriptors = [301150, 307080]

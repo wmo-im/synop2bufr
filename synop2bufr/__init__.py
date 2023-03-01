@@ -1224,9 +1224,6 @@ def transform(data: str, metadata: str, year: int,
         except Exception as e:
             LOGGER.error(e)
             LOGGER.error("Error creating BUFRMessage")
-            print(("Error creating BUFRMessage"
-                   f" for station {tsi}."),
-                  file=sys.stderr)
             conversion_success[tsi] = False
 
         # parse
@@ -1252,9 +1249,6 @@ def transform(data: str, metadata: str, year: int,
                     "status": "ERROR",
                     "message": f"Error encoding, BUFR set to None:\n\t\tError: {e}\n\t\tMessage: {msg}"  # noqa
                 }
-                print(("Error encoding BUFR for"
-                       f" report with station {tsi}"),
-                      file=sys.stderr)
                 conversion_success[tsi] = False
 
             # now identifier based on WSI and observation date as identifier

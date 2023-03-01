@@ -82,7 +82,7 @@ with open(MAPPINGS) as fh:
     _mapping = json.load(fh)
 
 
-def convert_to_dict(message: str, year: int, month: int) -> dict:
+def parse_synop(message: str, year: int, month: int) -> dict:
     """
     This function parses a SYNOP message, storing and returning the
     data as a Python dictionary.
@@ -946,13 +946,13 @@ def file_extract(file_: str) -> Tuple[list, int, int]:
     year, month = get_date_from_filename(filename)
 
     # Obtain the individual SYNOP messages from the file contents
-    messages = message_extract(data)
+    messages = extract_individual_synop(data)
 
     # Return the list of messages and the date of the file
     return messages, year, month
 
 
-def message_extract(data: str) -> list:
+def extract_individual_synop(data: str) -> list:
     """
     Separates the SYNOP tac and returns the individual SYNOP
     messages, ready for conversion
@@ -1041,32 +1041,6 @@ def get_date_from_filename(name: str) -> Tuple[int, int]:
         year = date.today().year
         month = date.today().month
         return year, month
-
-
-def extract_individual_synop(data: str) -> list:
-    """
-    Extract messages from a SYNOP
-
-    :param data: `str` of data
-
-    :returns: `list` of messages
-    """
-
-    return message_extract(data)
-
-
-def parse_synop(data: str, year: int, month: int) -> dict:
-    """
-    Parse a SYNOP into a dict
-
-    :param data: `str` of data
-    :param year: year (`int`)
-    :param month: month (`int`)
-
-    :returns: `dict` of data
-    """
-
-    return convert_to_dict(data, year, month)
 
 
 def transform(data: str, metadata: str, year: int,

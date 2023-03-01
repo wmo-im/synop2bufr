@@ -47,10 +47,9 @@ where `method_name` is a placeholder for the following methods provided in this 
 
 | Method         | Description                                                                                                        |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `to_bufr`         | Conversion of all SYNOP data to multiple BUFR4 files.                                                              |
-| `to_json`         | Conversion of all SYNOP data to a nested Python dictionary object, keyed by TSI (traditional station idenfitifer). |
-| `convert_to_dict` | Conversion of a single SYNOP tac string to a Python dictionary object.                                             |
-| `message_extract` | Extracts and reformats the individual SYNOP messages from a single string.                                         |
+| `transform`         | Conversion of all SYNOP data to multiple BUFR4 files.                                                              |
+| `parse_synop` | Conversion of a single SYNOP tac string to a Python dictionary object.                                             |
+| `extract_individual_synop` | Extracts and reformats the individual SYNOP messages from a single string.                                         |
 | `file_extract`    | Extracts and reformats the individual SYNOP messages from a single text file.                                      |
 
 ___

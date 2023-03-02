@@ -13,7 +13,7 @@ The synop2bufr Python module contains both a command line interface and API to c
 
 Dependencies are listed in [requirements.txt](https://github.com/wmo-im/synop2bufr/blob/main/requirements.txt). Dependencies are automatically installed during synop2bufr installation.
 
-```bash
+```console
 docker build -t synop2bufr:local .
 docker run -it -v ${pwd}:/local synop2bufr
 ```
@@ -24,9 +24,9 @@ Example data can be found in `data` directory, with the corresponding reference 
 
 To transform SYNOP data file into BUFR:
 
-```bash
+```console
 mkdir output-data
-synop2bufr transform data/A_SMRO01YRBK211200_C_EDZW_20220321120500_12524785.txt --metadata data/metadata.csv --year 2023 --month 03 --output-dir output-data
+synop2bufr transform --metadata data/metadata.csv --year 2023 --month 03 --output-dir output-data data/A_SMRO01YRBK211200_C_EDZW_20220321120500_12524785.txt
 ```
 
 ## Usage Guide
@@ -47,10 +47,9 @@ where `method_name` is a placeholder for the following methods provided in this 
 
 | Method         | Description                                                                                                        |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `to_bufr`         | Conversion of all SYNOP data to multiple BUFR4 files.                                                              |
-| `to_json`         | Conversion of all SYNOP data to a nested Python dictionary object, keyed by TSI (traditional station idenfitifer). |
-| `convert_to_dict` | Conversion of a single SYNOP tac string to a Python dictionary object.                                             |
-| `message_extract` | Extracts and reformats the individual SYNOP messages from a single string.                                         |
+| `transform`         | Conversion of all SYNOP data to multiple BUFR4 files.                                                              |
+| `parse_synop` | Conversion of a single SYNOP tac string to a Python dictionary object.                                             |
+| `extract_individual_synop` | Extracts and reformats the individual SYNOP messages from a single string.                                         |
 | `file_extract`    | Extracts and reformats the individual SYNOP messages from a single text file.                                      |
 
 ___
@@ -69,12 +68,12 @@ This method generates BUFR4 file(s) in a folder called _output-bufr_. The number
 
 ### Example
 
-Suppose we have a text file named `A_SMRO01YRBK211200_C_EDZW_20220321120500_12524785.txt` containing 23 SYNOP messages. We can convert these to 23 BUFR4 files with the following code:
+Suppose we have a text file named `A_SMRO01YRBK211200_C_EDZW_20220321120500_12524785.txt` containing 23 SYNOP reports from January 2023, with corresponding station metadata `"station_list.csv"`. We can convert these to 23 BUFR4 files with the following code:
 
 ```python
-from synop2bufr import to_json
+from synop2bufr import transform
 
-to_json("./A_SMRO01YRBK211200_C_EDZW_20220321120500_12524785.txt")
+transform(data = "A_SMRO01YRBK211200_C_EDZW_20220321120500_12524785.txt", metadata = "station_list.csv", year = 2023, month = 1)
 ```
 
 > Note: the Python file must be run in the Docker container, not on your physical machine!
@@ -85,10 +84,10 @@ ___
 
 synop2bufr offers two methods to obtain the Python dictionary of SYNOP message(s) prior to conversion to BUFR.
 
-The most simple of which is `convert_to_dict`. This can be used in the following way:
+The most simple of which is `parse_synop`. This can be used in the following way:
 
 ```python
-convert_to_dict(single_synop_message, year, month)
+parse_synop(single_synop_message, year, month)
 ```
 
 where the SYNOP message must be a string, and the year/month must be an integer. This returns an array containing a single Python dictionary for the decoded message, as well as the number of section 3 and section 4 cloud groups detected[^1].
@@ -96,20 +95,6 @@ where the SYNOP message must be a string, and the year/month must be an integer.
 [^1]: These are the replicated cloud groups of section 3 and section 4 of a SYNOP message. See the [WMO manual on FM-12](https://library.wmo.int/doc_num.php?explnum_id=10235) for more details.
 
 > Note: For this method, the terminating character `=` of the SYNOP message must be omitted.
-
-Another and more complex method is `to_json`. This can be used as follows:
-
-```python
-to_json(SYNOP message)
-```
-
-where the input is the same as the `to_bufr` method. Just like `convert_to_dict`, this returns an array containing a nested Python dictionary for all of the decoded messages, as well as the number of section 3 and section 4 cloud groups detected.
-
-The main advantage of `to_json` is that it is able to process several SYNOP messages simultaneously to return one nested dictionary for all stations.
-
-Additionally, when a text file name is provided as input, it automatically determines the year/month of the message (and otherwise automatically assigns the current year/month).
-
-> Note: For this method, the terminating character `=` of each SYNOP message must remain in the string.
 
 ### Example
 
@@ -123,15 +108,14 @@ AAXX 21121
 15020 02997 23104 10130 21075 30177 40377 58020 60001 81041=
 ```
 
-We can decode one of the messages, e.g. the former, using `convert_to_dict` as follows:
+We can decode one of the messages, e.g. the former, using `parse_synop` as follows:
 
 ```python
-from synop2bufr import convert_to_dict
+from synop2bufr import parse_synop
 
-message = "AAXX 21121 
-15001 05515 32931 10103 21090 39765 42250 57020 60001"
+message = "AAXX 21121 15001 05515 32931 10103 21090 39765 42250 57020 60001"
 
-convert_to_dict(message, 2023, 1)
+parse_synop(data = message, year = 2023, month = 1)
 ```
 
 which returns (pretty printed):
@@ -227,211 +211,18 @@ which returns (pretty printed):
 
 > Note: The dictionary returned always has the same keys, meaning that often there are many null items as these groups aren't present in the SYNOP message.
 
-We can decode all of these messages at once using `to_json` as follows:
-
-```python
-from synop2bufr import to_json
-
-messages = """AAXX 21121
-
-15015 02999 02501 10103 21090 39765 42952 57020=
-
-15020 02997 23104 10130 21075 30177 40377 58020 60001 81041="""
-
-to_json(messages)
-```
-
-which returns (pretty printed):
-
-```json
-{
-  "15015": [
-    {
-      "report_type": "AAXX",
-      "year": 2023,
-      "month": 1,
-      "day": 21,
-      "hour": 12,
-      "minute": 0,
-      "wind_indicator": 8,
-      "block_no": "15",
-      "station_no": "015",
-      "station_id": "15015",
-      "region": null,
-      "WMO_station_type": 1,
-      "lowest_cloud_base": null,
-      "visibility": 50000,
-      "cloud_cover": 0,
-      "time_significance": 2,
-      "wind_time_period": -10,
-      "wind_direction": 250,
-      "wind_speed": 1,
-      "air_temperature": 283.45,
-      "dewpoint_temperature": 264.15,
-      "relative_humidity": 24.799534703795413,
-      "station_pressure": 97650.0,
-      "isobaric_surface": null,
-      "geopotential_height": null,
-      "sea_level_pressure": null,
-      "3hr_pressure_change": null,
-      "pressure_tendency_characteristic": 15,
-      "precipitation_s1": null,
-      "ps1_time_period": null,
-      "present_weather": 511,
-      "past_weather_1": 31,
-      "past_weather_2": 31,
-      "past_weather_time_period": -6,
-      "cloud_vs_s1": 62,
-      "cloud_amount_s1": 0,
-      "low_cloud_type": 30,
-      "middle_cloud_type": 20,
-      "high_cloud_type": 10,
-      "maximum_temperature": null,
-      "minimum_temperature": null,
-      "ground_state": null,
-      "ground_temperature": null,
-      "snow_depth": null,
-      "evapotranspiration": null,
-      "evaporation_instrument": null,
-      "temperature_change": null,
-      "tc_time_period": null,
-      "sunshine_amount_1hr": null,
-      "sunshine_amount_24hr": null,
-      "low_cloud_drift_direction": null,
-      "low_cloud_drift_vs": null,
-      "middle_cloud_drift_direction": null,
-      "middle_cloud_drift_vs": null,
-      "high_cloud_drift_direction": null,
-      "high_cloud_drift_vs": null,
-      "e_cloud_genus": null,
-      "e_cloud_direction": null,
-      "e_cloud_elevation": null,
-      "24hr_pressure_change": null,
-      "net_radiation_1hr": null,
-      "net_radiation_24hr": null,
-      "global_solar_radiation_1hr": null,
-      "global_solar_radiation_24hr": null,
-      "diffuse_solar_radiation_1hr": null,
-      "diffuse_solar_radiation_24hr": null,
-      "long_wave_radiation_1hr": null,
-      "long_wave_radiation_24hr": null,
-      "short_wave_radiation_1hr": null,
-      "short_wave_radiation_24hr": null,
-      "net_short_wave_radiation_1hr": null,
-      "net_short_wave_radiation_24hr": null,
-      "direct_solar_radiation_1hr": null,
-      "direct_solar_radiation_24hr": null,
-      "precipitation_s3": null,
-      "ps3_time_period": null,
-      "precipitation_24h": null,
-      "highest_gust_1": null,
-      "highest_gust_2": null,
-      "hg2_time_period": -360
-    },
-    0,
-    0
-  ],
-  "15020": [
-    {
-      "report_type": "AAXX",
-      "year": 2023,
-      "month": 1,
-      "day": 21,
-      "hour": 12,
-      "minute": 0,
-      "wind_indicator": 8,
-      "block_no": "15",
-      "station_no": "020",
-      "station_id": "15020",
-      "region": null,
-      "WMO_station_type": 1,
-      "lowest_cloud_base": 2500,
-      "visibility": 10000,
-      "cloud_cover": 25,
-      "time_significance": 2,
-      "wind_time_period": -10,
-      "wind_direction": 310,
-      "wind_speed": 4,
-      "air_temperature": 286.15,
-      "dewpoint_temperature": 265.65,
-      "relative_humidity": 23.314606896338145,
-      "station_pressure": 101770.0,
-      "isobaric_surface": null,
-      "geopotential_height": null,
-      "sea_level_pressure": null,
-      "3hr_pressure_change": null,
-      "pressure_tendency_characteristic": 15,
-      "precipitation_s1": null,
-      "ps1_time_period": null,
-      "present_weather": 511,
-      "past_weather_1": 31,
-      "past_weather_2": 31,
-      "past_weather_time_period": -6,
-      "cloud_vs_s1": 63,
-      "cloud_amount_s1": null,
-      "low_cloud_type": 63,
-      "middle_cloud_type": 63,
-      "high_cloud_type": 63,
-      "maximum_temperature": null,
-      "minimum_temperature": null,
-      "ground_state": null,
-      "ground_temperature": null,
-      "snow_depth": null,
-      "evapotranspiration": null,
-      "evaporation_instrument": null,
-      "temperature_change": null,
-      "tc_time_period": null,
-      "sunshine_amount_1hr": null,
-      "sunshine_amount_24hr": null,
-      "low_cloud_drift_direction": null,
-      "low_cloud_drift_vs": null,
-      "middle_cloud_drift_direction": null,
-      "middle_cloud_drift_vs": null,
-      "high_cloud_drift_direction": null,
-      "high_cloud_drift_vs": null,
-      "e_cloud_genus": null,
-      "e_cloud_direction": null,
-      "e_cloud_elevation": null,
-      "24hr_pressure_change": null,
-      "net_radiation_1hr": null,
-      "net_radiation_24hr": null,
-      "global_solar_radiation_1hr": null,
-      "global_solar_radiation_24hr": null,
-      "diffuse_solar_radiation_1hr": null,
-      "diffuse_solar_radiation_24hr": null,
-      "long_wave_radiation_1hr": null,
-      "long_wave_radiation_24hr": null,
-      "short_wave_radiation_1hr": null,
-      "short_wave_radiation_24hr": null,
-      "net_short_wave_radiation_1hr": null,
-      "net_short_wave_radiation_24hr": null,
-      "direct_solar_radiation_1hr": null,
-      "direct_solar_radiation_24hr": null,
-      "precipitation_s3": null,
-      "ps3_time_period": null,
-      "precipitation_24h": null,
-      "highest_gust_1": null,
-      "highest_gust_2": null,
-      "hg2_time_period": -360
-    },
-    0,
-    0
-  ]
-}
-```
-
-> Note: As the example messages do not contain section 3 nor section 4 groups, the number of such cloud groups detected is 0 in both outputs.
+> Note 2: As the example messages do not contain section 3 nor section 4 groups, the number of such cloud groups detected is 0.
 
 ___
 
 ### Message extraction
 
-The remaining two methods provided by synop2bufr are relatively basic and unlikely to be used. These are `message_extract` and `file_extract`, which as mentioned above are used to extract strings ready for conversion into a Python dictionary and subsequently BUFR4 files.
+The remaining two methods provided by synop2bufr are relatively basic and unlikely to be used. These are `extract_individual_synop` and `file_extract`, which as mentioned above are used to extract strings ready for conversion into a Python dictionary and subsequently BUFR4 files.
 
-One can use `message_extract` in the following way:
+One can use `extract_individual_synop` in the following way:
 
 ```python
-message_extract(SYNOP message string)
+extract_individual_synop(SYNOP message string)
 ```
 
 which returns an array of strings, where each string is an individual SYNOP message (ready for `convert_to_dict` for example).
@@ -442,13 +233,13 @@ One can use `file_extract` in the following way:
 file_extract(SYNOP message text file directory)
 ```
 
-which returns the same array as `message_extract` would if provided the contents of the file, as well as the year and month determined by the file name.
+which returns the same array as `extract_individual_synop` would if provided the contents of the file, as well as the year and month determined by the file name.
 
 ---
 
 ## Releasing
 
-```bash
+```console
 # create release (x.y.z is the release version)
 vi synop2bufr/__init__.py  # update __version__
 git commit -am 'update release version vx.y.z'

@@ -21,7 +21,7 @@
 
 import csv
 from copy import deepcopy
-from datetime import (date, datetime, timezone)
+from datetime import (date, datetime)
 from io import StringIO
 import json
 import logging
@@ -36,6 +36,8 @@ from pymetdecoder import synop
 __version__ = '0.1.dev0'
 
 LOGGER = logging.getLogger(__name__)
+SUCCESS = 0
+FAIL = 1
 
 # Enumerate the keys
 _keys = ['report_type', 'year', 'month', 'day', 'hour', 'minute',
@@ -82,7 +84,7 @@ with open(MAPPINGS) as fh:
     _mapping = json.load(fh)
 
 
-def convert_to_dict(message: str, year: int, month: int) -> dict:
+def parse_synop(message: str, year: int, month: int) -> dict:
     """
     This function parses a SYNOP message, storing and returning the
     data as a Python dictionary.
@@ -134,7 +136,7 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
         if iw == 0:
             iw_translated = 0b0000  # Wind in m/s, default, no bits set
         elif iw == 1:
-            iw_translated = 0b1000 # Wind in m/s with anemometer bit 1 (left most) set  # noqa
+            iw_translated = 0b1000  # Wind in m/s with anemometer bit 1 (left most) set  # noqa
         elif iw == 3:
             iw_translated = 0b0100  # Wind in knots, bit 2 set
         elif iw == 4:
@@ -796,27 +798,27 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
 
             if genus_array[i]['cloud_genus'] is not None:
                 C_code = genus_array[i]['cloud_genus']['_code']
-                output[f'cloud_genus_s3_{i}'] = C_code
+                output[f'cloud_genus_s3_{i+1}'] = C_code
 
                 if C_code == 9:  # Cumulonimbus
                     if automatic_state:
-                        output[f'vs_s3_{i}'] = 24
+                        output[f'vs_s3_{i+1}'] = 24
                     else:
-                        output[f'vs_s3_{i}'] = 4
+                        output[f'vs_s3_{i+1}'] = 4
                 else:  # Non-Cumulonimbus
                     if automatic_state:
-                        output[f'vs_s3_{i}'] = i+21
+                        output[f'vs_s3_{i+1}'] = i+21
                     else:
-                        output[f'vs_s3_{i}'] = i+1
+                        output[f'vs_s3_{i+1}'] = i+1
 
             else:
                 # Missing value
-                output[f'cloud_genus_s3_{i}'] = 63
+                output[f'cloud_genus_s3_{i+1}'] = 63
 
                 if automatic_state:
-                    output[f'vs_s3_{i}'] = 20
+                    output[f'vs_s3_{i+1}'] = 20
                 else:
-                    output[f'vs_s3_{i}'] = 63
+                    output[f'vs_s3_{i+1}'] = 63
 
             if genus_array[i]['cloud_cover'] is not None:
                 # This is left in oktas just like group 8 in section 1
@@ -826,19 +828,18 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
                 # obscured and we keep the value as None
                 if N_oktas == 9:
                     # Replace vertical significance code in this case
-                    output[f'vs_s3_{i}'] = 5
-
+                    output[f'vs_s3_{i+1}'] = 5
                 else:
-                    output[f'cloud_amount_s3_{i}'] = N_oktas
+                    output[f'cloud_amount_s3_{i+1}'] = N_oktas
 
             else:
                 # Missing value
-                output[f'cloud_amount_s3_{i}'] = 15
+                output[f'cloud_amount_s3_{i+1}'] = 15
 
             if genus_array[i]['cloud_height'] is not None:
                 # In SYNOP the code table values correspond to heights in m,
                 # which BUFR requires
-                output[f'cloud_height_s3_{i}'] = \
+                output[f'cloud_height_s3_{i+1}'] = \
                     genus_array[i]['cloud_height']['value']
 
     #  Group 9 9SpSpspsp is regional supplementary information and is
@@ -904,26 +905,26 @@ def convert_to_dict(message: str, year: int, month: int) -> dict:
             # Now we convert the code string to an integer, and check that
             # there aren't missing values
             if cloud_amount != '/':
-                output[f'cloud_amount_s4_{i}'] = int(cloud_amount)
+                output[f'cloud_amount_s4_{i+1}'] = int(cloud_amount)
             else:
                 # Missing value
-                output[f'cloud_amount_s4_{i}'] = 15
+                output[f'cloud_amount_s4_{i+1}'] = 15
 
             if cloud_genus != '/':
-                output[f'cloud_genus_s4_{i}'] = int(cloud_genus)
+                output[f'cloud_genus_s4_{i+1}'] = int(cloud_genus)
             else:
                 # Missing value
-                output[f'cloud_genus_s4_{i}'] = 63
+                output[f'cloud_genus_s4_{i+1}'] = 63
 
             if cloud_height != '//':
                 # Multiply by 100 to get metres (B/C1.5.2.4)
-                output[f'cloud_height_s4_{i}'] = int(cloud_height) * 100
+                output[f'cloud_height_s4_{i+1}'] = int(cloud_height) * 100
 
             if cloud_top != '/':
-                output[f'cloud_top_s4_{i}'] = int(cloud_top)
+                output[f'cloud_top_s4_{i+1}'] = int(cloud_top)
             else:
                 # Missing value
-                output[f'cloud_top_s4_{i}'] = 15
+                output[f'cloud_top_s4_{i+1}'] = 15
 
     # ! Return the new dictionary and the number of groups in section 4
     return output, num_s3_clouds, num_s4_clouds
@@ -947,13 +948,13 @@ def file_extract(file_: str) -> Tuple[list, int, int]:
     year, month = get_date_from_filename(filename)
 
     # Obtain the individual SYNOP messages from the file contents
-    messages = message_extract(data)
+    messages = extract_individual_synop(data)
 
     # Return the list of messages and the date of the file
     return messages, year, month
 
 
-def message_extract(data: str) -> list:
+def extract_individual_synop(data: str) -> list:
     """
     Separates the SYNOP tac and returns the individual SYNOP
     messages, ready for conversion
@@ -970,7 +971,10 @@ def message_extract(data: str) -> list:
 
     # Start position is -1 if AAXX is not present in the message
     if start_position == -1:
-        raise Exception(
+        # LOGGER.error(
+        #     "Invalid SYNOP message: AAXX could not be found."
+        # )
+        raise ValueError(
             "Invalid SYNOP message: AAXX could not be found."
         )
 
@@ -983,7 +987,12 @@ def message_extract(data: str) -> list:
             s0 = d
         else:
             if not d.__contains__("="):
-                raise Exception("Delimiters (=) are not present in the string, thus unable to identify separate SYNOP messages.")  # noqa
+                LOGGER.error((
+                    "Delimiters (=) are not present in the string,"
+                    " thus unable to identify separate SYNOP reports."
+                    ))  # noqa
+                raise ValueError
+
             d = re.sub(r"\n+", " ", d)
             _messages = d.split("=")
             num_msg = len(_messages)
@@ -998,6 +1007,13 @@ def message_extract(data: str) -> list:
                 else:
                     _messages[idx] = None
             messages.extend(list(filter(None, _messages)))
+
+    # Check any messages were actually extracted
+    if messages == []:
+        raise Exception(("No SYNOP reports were extracted."
+                         " Perhaps the date group YYGGiw"
+                         " is missing."))
+
     # Return the messages
     return messages
 
@@ -1030,36 +1046,10 @@ def get_date_from_filename(name: str) -> Tuple[int, int]:
         LOGGER.error(
             f"""File {name} is in wrong file format. The current year and month
             will be used for the conversion."""
-            )
+        )
         year = date.today().year
         month = date.today().month
         return year, month
-
-
-def extract_individual_synop(data: str) -> list:
-    """
-    Extract messages from a SYNOP
-
-    :param data: `str` of data
-
-    :returns: `list` of messages
-    """
-
-    return message_extract(data)
-
-
-def parse_synop(data: str, year: int, month: int) -> dict:
-    """
-    Parse a SYNOP into a dict
-
-    :param data: `str` of data
-    :param year: year (`int`)
-    :param month: month (`int`)
-
-    :returns: `dict` of data
-    """
-
-    return convert_to_dict(data, year, month)
 
 
 def transform(data: str, metadata: str, year: int,
@@ -1086,15 +1076,17 @@ def transform(data: str, metadata: str, year: int,
         tsi_mapping = {}
         for row in reader:
             single_row = dict(zip(col_names, row))
-            wsi = single_row['wigos_station_identifier']
             tsi = single_row['traditional_station_identifier']
-            metadata_dict[wsi] = deepcopy(single_row)
-            if tsi in tsi_mapping:
-                LOGGER.error(f"""Duplicate entries found for station {tsi} in
-                             station list file""")
-                raise ValueError(f"""Duplicate entries found for station {tsi}
-                                 in station list file""")
-            tsi_mapping[tsi] = wsi
+            try:
+                wsi = single_row['wigos_station_identifier']
+                metadata_dict[wsi] = deepcopy(single_row)
+                if tsi in tsi_mapping:
+                    LOGGER.warning(("Duplicate entries found for station"
+                                    f" {tsi} in station list file"))
+                tsi_mapping[tsi] = wsi
+            except Exception as e:
+                LOGGER.error(e)
+
         fh.close()
         # metadata = metadata_dict[wsi]
     else:
@@ -1102,7 +1094,14 @@ def transform(data: str, metadata: str, year: int,
         raise ValueError
 
     # Now extract individual synop reports from string
-    messages = extract_individual_synop(data)
+    try:
+        messages = extract_individual_synop(data)
+    except Exception as e:
+        LOGGER.error(e)
+        return None
+
+    # Count how many conversions were successful using a dictionary
+    conversion_success = {}
 
     # Now we need to iterate over the reports, parsing and converting to BUFR
     for message in messages:
@@ -1120,36 +1119,49 @@ def transform(data: str, metadata: str, year: int,
         # parse data to dictionary and get number of section 3 and 4
         # clouds
         try:
-            msg, num_s3_clouds, num_s4_clouds = parse_synop(message, year, month)  # noqa
+            msg, num_s3_clouds, num_s4_clouds = \
+                parse_synop(message, year, month)  # noqa
+            # get TSI
+            tsi = msg['station_id']
         except Exception as e:
-            LOGGER.error(f"Error parsing SYNOP: {message}")
-            raise e
-        # get TSI
-        tsi = msg['station_id']
+            LOGGER.error(("Error parsing SYNOP report:"
+                          f" {message}. {str(e)}"))
+            continue
+
         # set WSI
-        wsi = tsi_mapping[tsi]
+        try:
+            wsi = tsi_mapping[tsi]
+        except Exception:
+            conversion_success[tsi] = False
+            LOGGER.warning((f"Station {tsi} not found"
+                            " in station file."))
+
         # parse WSI to get sections
         try:
             wsi_series, wsi_issuer, wsi_issue_number, wsi_local = wsi.split("-")   # noqa
+
+            # get other required metadata
+            latitude = metadata_dict[wsi]["latitude"]
+            longitude = metadata_dict[wsi]["longitude"]
+            station_height = metadata_dict[wsi]["elevation"]
+
+            # add these values to the data dictionary
+            msg['_wsi_series'] = wsi_series
+            msg['_wsi_issuer'] = wsi_issuer
+            msg['_wsi_issue_number'] = wsi_issue_number
+            msg['_wsi_local'] = wsi_local
+            msg['_latitude'] = latitude
+            msg['_longitude'] = longitude
+            conversion_success[tsi] = True
         except Exception:
-            raise ValueError(f"""Invalid WSI ({wsi}) found in station file,
-                             unable to parse""")
+            conversion_success[tsi] = False
 
-        # get other required metadata
-        latitude = metadata_dict[wsi]["latitude"]
-        longitude = metadata_dict[wsi]["longitude"]
-        station_height = metadata_dict[wsi]["elevation"]
+            if wsi == "":
+                LOGGER.warning(f"Missing WSI for station {tsi}")
+            else:
+                LOGGER.warning((f"Invalid WSI ({wsi}) found in station file,"
+                                " unable to parse"))
 
-        # add these values to the data dictionary
-        msg['_wsi_series'] = wsi_series
-        msg['_wsi_issuer'] = wsi_issuer
-        msg['_wsi_issue_number'] = wsi_issue_number
-        msg['_wsi_local'] = wsi_local
-        msg['_latitude'] = latitude
-        msg['_longitude'] = longitude
-
-        # update mappings for number of clouds
-        s3_mappings = {}
         for idx in range(num_s3_clouds):
             # Build the dictionary of mappings for section 3 group 8NsChshs
 
@@ -1157,24 +1169,24 @@ def transform(data: str, metadata: str, year: int,
             # has to be increased:
             # - cloudAmount: used 2 times (Nh, Ns)
             # - cloudType: used 4 times (CL, CM, CH, C)
-            # - heightOfBaseOfCloud: used
-            # 1 time (h)
+            # - heightOfBaseOfCloud: used 1 time (h)
             # - verticalSignificance: used 7 times (for N, low-high cloud
             # amount, low-high cloud drift)
-            s3_mappings = {
-                {"eccodes_key": f"""#{idx+8}
-                 #verticalSignificanceSurfaceObservations""",
-                 "value": f"data:vs_s3_{idx+1}"},
+            s3_mappings = [
+                {"eccodes_key": (
+                    f"#{idx+8}"
+                    "#verticalSignificanceSurfaceObservations"
+                ),
+                    "value": f"data:vs_s3_{idx+1}"},
                 {"eccodes_key": f"#{idx+3}#cloudAmount",
                  "value": f"data:cloud_amount_s3_{idx+1}"},
                 {"eccodes_key": f"#{idx+5}#cloudType",
                  "value": f"data:cloud_genus_s3_{idx+1}"},
                 {"eccodes_key": f"#{idx+2}#heightOfBaseOfCloud",
-                 "value": f"data:cloud_height_s3_{idx+1}"},
-            }
-        mapping.update(s3_mappings)
+                 "value": f"data:cloud_height_s3_{idx+1}"}
+            ]
+            mapping.update(s3_mappings[i] for i in range(4))
 
-        s4_mappings = {}
         for idx in range(num_s4_clouds):
             # Based upon the station height metadata, the value of vertical
             # significance for section 4 groups can be determined.
@@ -1184,17 +1196,19 @@ def transform(data: str, metadata: str, year: int,
             # significance code 11.
             cloud_top_height = msg[f'cloud_height_s4_{idx+1}']
 
-            if cloud_top_height > station_height:
+            if cloud_top_height > int(station_height):
                 vs_s4 = 10
             else:
                 vs_s4 = 11
 
             # NOTE: Some of the ecCodes keys are used in the above, so we must
             # add 'num_s3_clouds'
-            s4_mappings = {
-                {"eccodes_key": f"""#{idx+num_s3_clouds+8}
-                 #verticalSignificanceSurfaceObservations""",
-                 "value": f"const:{vs_s4}"},
+            s4_mappings = [
+                {"eccodes_key": (
+                    f"#{idx+num_s3_clouds+8}"
+                    "#verticalSignificanceSurfaceObservations"
+                ),
+                    "value": f"const:{vs_s4}"},
                 {"eccodes_key": f"#{idx+num_s3_clouds+3}#cloudAmount",
                  "value": f"data:cloud_amount_s4_{idx+1}"},
                 {"eccodes_key": f"#{idx+num_s3_clouds+5}#cloudType",
@@ -1203,8 +1217,8 @@ def transform(data: str, metadata: str, year: int,
                  "value": f"data:cloud_height_s4_{idx+1}"},
                 {"eccodes_key": f"#{idx+1}#cloudTopDescription",
                  "value": f"data:cloud_top_s4_{idx+1}"}
-            }
-        mapping.update(s4_mappings)
+            ]
+            mapping.update(s4_mappings[i] for i in range(4))
 
         # At this point we have a dictionary for the data, a
         # dictionary of the mappings and the metadata
@@ -1224,44 +1238,74 @@ def transform(data: str, metadata: str, year: int,
                 extended_delayed_replications,
                 table_version)
         except Exception as e:
+            LOGGER.error(e)
             LOGGER.error("Error creating BUFRMessage")
-            raise e
+            conversion_success[tsi] = False
 
         # parse
-        message.parse(msg, mapping)
+        if conversion_success[tsi]:
+            try:
+                message.parse(msg, mapping)
+            except Exception as e:
+                LOGGER.error(e)
+                LOGGER.error("Error parsing message")
+                conversion_success[tsi] = False
 
-        try:
-            result["bufr4"] = message.as_bufr()  # encode to BUFR
-        except Exception as e:
-            LOGGER.error("Error encoding BUFR, null returned")
-            LOGGER.error(e)
-            result["bufr4"] = None
+        # Only convert to BUFR if there's no errors so far
+        if conversion_success[tsi]:
+            try:
+                result["bufr4"] = message.as_bufr()  # encode to BUFR
+                result["_status"] = {"status": SUCCESS}
 
-        # now identifier based on WSI and observation date as identifier
-        isodate = message.get_datetime().strftime('%Y%m%dT%H%M%S')
-        rmk = f"WIGOS_{wsi}_{isodate}"
+            except Exception as e:
+                LOGGER.error("Error encoding BUFR, null returned")
+                LOGGER.error(e)
+                result["bufr4"] = None
+                result["_status"] = {
+                    "status": FAIL,
+                    "message": f"Error encoding, BUFR set to None:\n\t\tError: {e}\n\t\tMessage: {msg}"  # noqa
+                }
+                conversion_success[tsi] = False
 
-        # now additional metadata elements
-        result["_meta"] = {
-            "id": rmk,
-            "geometry": {
-                "type": "Point",
-                "coordinates": [
-                    message.get_element('#1#longitude'),
-                    message.get_element('#1#latitude')
-                ]
-            },
-            "properties": {
-                "md5": message.md5(),
-                "wigos_station_identifier": wsi,
-                "datetime": message.get_datetime(),
-                "originating_centre": message.get_element("bufrHeaderCentre"),
-                "data_category": message.get_element("dataCategory")
+            # now identifier based on WSI and observation date as identifier
+            isodate = message.get_datetime().strftime('%Y%m%dT%H%M%S')
+            rmk = f"WIGOS_{wsi}_{isodate}"
+
+            # now additional metadata elements
+            result["_meta"] = {
+                "id": rmk,
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [
+                        message.get_element('#1#longitude'),
+                        message.get_element('#1#latitude')
+                    ]
+                },
+                "properties": {
+                    "md5": message.md5(),
+                    "wigos_station_identifier": wsi,
+                    "datetime": message.get_datetime(),
+                    "originating_centre":
+                    message.get_element("bufrHeaderCentre"),
+                    "data_category": message.get_element("dataCategory")
+                }
             }
-        }
 
-        time_ = datetime.now(timezone.utc).isoformat()
-        LOGGER.info(f"{time_}|{result['_meta']}")
+            # time_ = datetime.now(timezone.utc).isoformat()
+            # LOGGER.info(f"{time_}|{result['_meta']}")
 
         # now yield result back to caller
         yield result
+
+        # Output conversion status to user
+        if conversion_success[tsi]:
+            LOGGER.info(f"Station {tsi} report converted")
+        else:
+            LOGGER.info(f"Station {tsi} report failed to convert")
+
+    # calculate number of successful conversions
+    conversion_count = sum(tsi for tsi in conversion_success.values())
+
+    # print number of messages converted
+    LOGGER.info((f"{conversion_count} / {len(messages)}"
+                 " reports converted successfully"))

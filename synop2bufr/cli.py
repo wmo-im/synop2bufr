@@ -21,11 +21,33 @@
 
 import logging
 import os.path
-import sys
+# import sys
+from datetime import datetime, timezone
 
 import click
 
 from synop2bufr import __version__, transform as transform_synop
+
+# Configure logger
+LOGGER = logging.getLogger()
+log_level = os.environ.get("LOG_LEVEL")
+logging.basicConfig(
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    level=getattr(logging, log_level),
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+
+# if (LOGGER.hasHandlers()):
+#     LOGGER.handlers.clear()
+
+# # Configure error handler
+# handler_err = logging.StreamHandler(sys.stderr)
+# handler_err.setLevel(logging.ERROR)
+# handler_err.setFormatter(logging.Formatter(
+#     fmt="%(asctime)s [%(levelname)s] %(message)s",
+#     datefmt="%Y-%m-%d %H:%M:%S"
+# ))
+# LOGGER.addHandler(handler_err)
 
 
 def cli_option_verbosity(f):
@@ -33,8 +55,7 @@ def cli_option_verbosity(f):
 
     def callback(ctx, param, value):
         if value is not None:
-            logging.basicConfig(stream=sys.stdout,
-                                level=getattr(logging, value))
+            LOGGER.setLevel(getattr(logging, value))
         return True
 
     return click.option("--verbosity", "-v",
@@ -48,26 +69,30 @@ def cli_callbacks(f):
     return f
 
 
-@click.group()
-@click.version_option(version=__version__)
+@ click.group()
+@ click.version_option(version=__version__)
 def cli():
     """synop2bufr"""
     pass
 
 
-@click.command()
-@click.pass_context
-@click.argument('synop_file', type=click.File(errors="ignore"))
-@click.option('--metadata', 'metadata', required=True,
-              type=click.File(errors="ignore"),
-              help="Name/directory of the station metadata")
-@click.option('--output-dir', 'output_dir', required=True,
-              help="Directory for the output BUFR files")
-@click.option('--year', 'year', required=True,
-              help="Year that the data corresponds to")
-@click.option('--month', 'month', required=True,
-              help="Month that the data corresponds to")
-@cli_option_verbosity
+@ click.command()
+@ click.pass_context
+@ click.argument('synop_file', type=click.File(errors="ignore"))
+@ click.option('--metadata', 'metadata', required=False,
+               default="metadata.csv",
+               type=click.File(errors="ignore"),
+               help="Name/directory of the station metadata")
+@ click.option('--output-dir', 'output_dir', required=False,
+               default=".",
+               help="Directory for the output BUFR files")
+@ click.option('--year', 'year', required=False,
+               default=datetime.now(timezone.utc).year,
+               help="Year that the data corresponds to")
+@ click.option('--month', 'month', required=False,
+               default=datetime.now(timezone.utc).month,
+               help="Month that the data corresponds to")
+@ cli_option_verbosity
 def transform(ctx, synop_file, metadata, output_dir, year, month, verbosity):
 
     try:

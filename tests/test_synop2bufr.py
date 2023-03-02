@@ -167,7 +167,7 @@ def test_no_type():
 
     with pytest.raises(Exception) as e:
         # Attempt to decode the message
-        result = extract_individual_synop(
+        extract_individual_synop(
             missing_station_type)
         assert str(
             e.value) == "Invalid SYNOP message: AAXX could not be found."
@@ -181,7 +181,7 @@ def test_no_time():
 
     with pytest.raises(Exception) as e:
         # Attempt to decode the message
-        result = parse_synop(missing_time)
+        parse_synop(missing_time)
         assert str(
             e.value) == ("No SYNOP reports were extracted."
                          " Perhaps the date group YYGGiw"
@@ -196,7 +196,9 @@ def test_no_tsi():
 
     with pytest.raises(Exception) as e:
         # Attempt to decode the message
-        result = parse_synop(missing_tsi)
+        parse_synop(missing_tsi)
         assert str(
             e.value) == ("Unexpected precipitation group"
-                         " found in section 1, thus unable to" " decode. Section 0 groups may be missing.")
+                         " found in section 1, thus unable to"
+                         " decode. Section 0 groups may be"
+                         " missing.")

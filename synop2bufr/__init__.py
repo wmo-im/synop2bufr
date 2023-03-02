@@ -21,7 +21,7 @@
 
 import csv
 from copy import deepcopy
-from datetime import (date, datetime, timezone)
+from datetime import (date, datetime)
 from io import StringIO
 import json
 import logging
@@ -1131,7 +1131,7 @@ def transform(data: str, metadata: str, year: int,
         # set WSI
         try:
             wsi = tsi_mapping[tsi]
-        except:
+        except Exception:
             conversion_success[tsi] = False
             LOGGER.warning((f"Station {tsi} not found"
                             " in station file."))
@@ -1291,7 +1291,7 @@ def transform(data: str, metadata: str, year: int,
                 }
             }
 
-            time_ = datetime.now(timezone.utc).isoformat()
+            # time_ = datetime.now(timezone.utc).isoformat()
             # LOGGER.info(f"{time_}|{result['_meta']}")
 
         # now yield result back to caller

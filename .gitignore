@@ -40,6 +40,8 @@ nosetests.xml
 *.bufr4
 *.geojson
 logs
+.vscode/
+.vscode/settings.json
 
 # pycharm
 .idea

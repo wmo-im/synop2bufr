@@ -37,24 +37,17 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 
-# # Configure warning handler
-# handler_default = logging.StreamHandler(sys.stderr)
-# handler_default.setLevel(logging.WARNING)
-# handler_default.setFormatter(format)
-# LOGGER.addHandler(handler_default)
+# if (LOGGER.hasHandlers()):
+#     LOGGER.handlers.clear()
 
-if (LOGGER.hasHandlers()):
-    LOGGER.handlers.clear()
-
-# Configure error handler
-handler_err = logging.StreamHandler(sys.stderr)
-handler_err.setLevel(logging.ERROR)
-# handler_err.propagate = False
-handler_err.setFormatter(logging.Formatter(
-    fmt="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
-))
-LOGGER.addHandler(handler_err)
+# # Configure error handler
+# handler_err = logging.StreamHandler(sys.stderr)
+# handler_err.setLevel(logging.ERROR)
+# handler_err.setFormatter(logging.Formatter(
+#     fmt="%(asctime)s [%(levelname)s] %(message)s",
+#     datefmt="%Y-%m-%d %H:%M:%S"
+# ))
+# LOGGER.addHandler(handler_err)
 
 
 def cli_option_verbosity(f):
@@ -62,7 +55,7 @@ def cli_option_verbosity(f):
 
     def callback(ctx, param, value):
         if value is not None:
-            logging.setLevel(getattr(logging, value))
+            LOGGER.setLevel(getattr(logging, value))
         return True
 
     return click.option("--verbosity", "-v",
@@ -109,6 +102,7 @@ def transform(ctx, synop_file, metadata, output_dir, year, month, verbosity):
         raise click.ClickException(e)
 
     for item in result:
+        
         key = item['_meta']["id"]
         bufr_filename = f"{output_dir}{os.sep}{key}.bufr4"
         with open(bufr_filename, "wb") as fh:

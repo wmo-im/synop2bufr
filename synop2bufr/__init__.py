@@ -36,6 +36,8 @@ from pymetdecoder import synop
 __version__ = '0.1.dev0'
 
 LOGGER = logging.getLogger(__name__)
+SUCCESS = 0
+FAIL = 1
 
 # Enumerate the keys
 _keys = ['report_type', 'year', 'month', 'day', 'hour', 'minute',
@@ -1005,6 +1007,13 @@ def extract_individual_synop(data: str) -> list:
                 else:
                     _messages[idx] = None
             messages.extend(list(filter(None, _messages)))
+
+    # Check any messages were actually extracted
+    if messages == []:
+        raise Exception(("No SYNOP reports were extracted."
+                         " Perhaps the date group YYGGiw"
+                         " is missing."))
+
     # Return the messages
     return messages
 
@@ -1072,8 +1081,8 @@ def transform(data: str, metadata: str, year: int,
                 wsi = single_row['wigos_station_identifier']
                 metadata_dict[wsi] = deepcopy(single_row)
                 if tsi in tsi_mapping:
-                    LOGGER.error(("Duplicate entries found for station"
-                                 f" {tsi} in station list file"))
+                    LOGGER.warning(("Duplicate entries found for station"
+                                    f" {tsi} in station list file"))
                 tsi_mapping[tsi] = wsi
             except Exception as e:
                 LOGGER.error(e)
@@ -1110,15 +1119,22 @@ def transform(data: str, metadata: str, year: int,
         # parse data to dictionary and get number of section 3 and 4
         # clouds
         try:
-            msg, num_s3_clouds, num_s4_clouds = parse_synop(message, year, month)  # noqa
+            msg, num_s3_clouds, num_s4_clouds = \
+                parse_synop(message, year, month)  # noqa
+            # get TSI
+            tsi = msg['station_id']
         except Exception as e:
-            LOGGER.error(f"Error parsing SYNOP: {message}")
-            raise e
-        # get TSI
-        tsi = msg['station_id']
+            LOGGER.error(("Error parsing SYNOP report:"
+                          f" {message}. {str(e)}"))
+            continue
 
         # set WSI
-        wsi = tsi_mapping[tsi]
+        try:
+            wsi = tsi_mapping[tsi]
+        except:
+            conversion_success[tsi] = False
+            LOGGER.warning((f"Station {tsi} not found"
+                            " in station file."))
 
         # parse WSI to get sections
         try:
@@ -1141,10 +1157,10 @@ def transform(data: str, metadata: str, year: int,
             conversion_success[tsi] = False
 
             if wsi == "":
-                LOGGER.error(f"Missing WSI for station {tsi}")
+                LOGGER.warning(f"Missing WSI for station {tsi}")
             else:
-                LOGGER.error((f"Invalid WSI ({wsi}) found in station file,"
-                              " unable to parse"))
+                LOGGER.warning((f"Invalid WSI ({wsi}) found in station file,"
+                                " unable to parse"))
 
         for idx in range(num_s3_clouds):
             # Build the dictionary of mappings for section 3 group 8NsChshs
@@ -1239,14 +1255,14 @@ def transform(data: str, metadata: str, year: int,
         if conversion_success[tsi]:
             try:
                 result["bufr4"] = message.as_bufr()  # encode to BUFR
-                result["_status"] = {"status": "PASS"}
+                result["_status"] = {"status": SUCCESS}
 
             except Exception as e:
                 LOGGER.error("Error encoding BUFR, null returned")
                 LOGGER.error(e)
                 result["bufr4"] = None
                 result["_status"] = {
-                    "status": "ERROR",
+                    "status": FAIL,
                     "message": f"Error encoding, BUFR set to None:\n\t\tError: {e}\n\t\tMessage: {msg}"  # noqa
                 }
                 conversion_success[tsi] = False
@@ -1276,20 +1292,20 @@ def transform(data: str, metadata: str, year: int,
             }
 
             time_ = datetime.now(timezone.utc).isoformat()
-            LOGGER.info(f"{time_}|{result['_meta']}")
+            # LOGGER.info(f"{time_}|{result['_meta']}")
 
-            # now yield result back to caller
-            yield result
+        # now yield result back to caller
+        yield result
 
         # Output conversion status to user
         if conversion_success[tsi]:
-            print(f"Station {tsi} report converted")
+            LOGGER.info(f"Station {tsi} report converted")
         else:
-            print(f"Station {tsi} report failed to convert")
+            LOGGER.info(f"Station {tsi} report failed to convert")
 
     # calculate number of successful conversions
     conversion_count = sum(tsi for tsi in conversion_success.values())
 
     # print number of messages converted
-    print((f"{conversion_count} / {len(messages)} reports"
-          " converted successfully"))
+    LOGGER.info((f"{conversion_count} / {len(messages)}"
+                 " reports converted successfully"))

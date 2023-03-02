@@ -156,45 +156,47 @@ def test_invalid_separation():
             e.value) == (
                         "Delimiters (=) are not present in the string,"
                         " thus unable to identify separate SYNOP reports."
-                        ) # noqa
+                        )  # noqa
 
 
-# def test_no_type():
-    #
-    # missing_station_type = """21121
-    #        15001 05515 32931 10103 21090
-    # 39765 42250 57020 60071 72006 82110 91155="""
-    #
-    # with pytest.raises(Exception) as e:
-    #        # Attempt to decode the message
-    #        result = to_json(missing_station_type)
-    #        assert str(
-#            e.value) == "Invalid SYNOP message: AAXX could not be found."
+def test_no_type():
+
+    missing_station_type = """21121
+           15001 05515 32931 10103 21090
+    39765 42250 57020 60071 72006 82110 91155="""
+
+    with pytest.raises(Exception) as e:
+        # Attempt to decode the message
+        result = extract_individual_synop(
+            missing_station_type)
+        assert str(
+            e.value) == "Invalid SYNOP message: AAXX could not be found."
 
 
-# def test_no_time():
-    #
-    # missing_time = """AAXX
-    #        15001 05515 32931 10103 21090
-    # 39765 42250 57020 60071 72006 82110 91155="""
-    #
-    # with pytest.raises(Exception) as e:
-    #        # Attempt to decode the message
-    #        result = to_json(missing_time)
-    #        assert str(
-#            e.value) == "Unexpected precipitation group found in section 1,
-# thus unable to decode. Section 0 groups may be missing."
+def test_no_time():
+
+    missing_time = """AAXX
+           15001 05515 32931 10103 21090
+    39765 42250 57020 60071 72006 82110 91155"""
+
+    with pytest.raises(Exception) as e:
+        # Attempt to decode the message
+        result = parse_synop(missing_time)
+        assert str(
+            e.value) == ("No SYNOP reports were extracted."
+                         " Perhaps the date group YYGGiw"
+                         " is missing.")
 
 
-# def test_no_tsi():
-    #
-    # missing_tsi = """AAXX 21121
-    #        05515 32931 10103 21090
-    # 39765 42250 57020 60071 72006 82110 91155="""
-    #
-    # with pytest.raises(Exception) as e:
-    #        # Attempt to decode the message
-    #        result = to_json(missing_tsi)
-    #        assert str(
-#            e.value) == "Unexpected precipitation group found in section 1,
-# thus unable to decode. Section 0 groups may be missing."
+def test_no_tsi():
+
+    missing_tsi = """AAXX 21121
+           05515 32931 10103 21090
+    39765 42250 57020 60071 72006 82110 91155="""
+
+    with pytest.raises(Exception) as e:
+        # Attempt to decode the message
+        result = parse_synop(missing_tsi)
+        assert str(
+            e.value) == ("Unexpected precipitation group"
+                         " found in section 1, thus unable to" " decode. Section 0 groups may be missing.")

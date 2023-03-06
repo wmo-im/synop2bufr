@@ -26,6 +26,8 @@ RUN cd /build \
     # delete the build folder that is no longer needed after installing the modules
     && rm -r /build
 
-RUN adduser wis2user
-USER wis2user
-WORKDIR /home/wis2user
+#RUN adduser wis2user
+#USER wis2user
+#WORKDIR /home/wis2user
+
+WORKDIR /

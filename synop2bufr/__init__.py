@@ -1264,7 +1264,7 @@ def transform(data: str, metadata: str, year: int,
                 LOGGER.error(e)
                 result["bufr4"] = None
                 status = {
-                    "code": FAILED
+                    "code": FAILED,
                     "message": f"Error encoding, BUFR set to None:\n\t\tError: {e}\n\t\tMessage: {msg}"  # noqa
                 }
                 conversion_success[tsi] = False

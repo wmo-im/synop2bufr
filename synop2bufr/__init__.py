@@ -36,8 +36,10 @@ from pymetdecoder import synop
 __version__ = 'v0.1.0'
 
 LOGGER = logging.getLogger(__name__)
-SUCCESS = 0
-FAIL = 1
+
+# status codes
+FAILED = 0
+PASSED = 1
 
 # Enumerate the keys
 _keys = ['report_type', 'year', 'month', 'day', 'hour', 'minute',
@@ -1255,14 +1257,14 @@ def transform(data: str, metadata: str, year: int,
         if conversion_success[tsi]:
             try:
                 result["bufr4"] = message.as_bufr()  # encode to BUFR
-                result["_status"] = {"status": SUCCESS}
+                status = {"code": PASSED}
 
             except Exception as e:
                 LOGGER.error("Error encoding BUFR, null returned")
                 LOGGER.error(e)
                 result["bufr4"] = None
-                result["_status"] = {
-                    "status": FAIL,
+                status = {
+                    "code": FAILED
                     "message": f"Error encoding, BUFR set to None:\n\t\tError: {e}\n\t\tMessage: {msg}"  # noqa
                 }
                 conversion_success[tsi] = False
@@ -1288,7 +1290,8 @@ def transform(data: str, metadata: str, year: int,
                     "originating_centre":
                     message.get_element("bufrHeaderCentre"),
                     "data_category": message.get_element("dataCategory")
-                }
+                },
+                "result": status
             }
 
             # time_ = datetime.now(timezone.utc).isoformat()

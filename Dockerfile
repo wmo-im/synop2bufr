@@ -29,5 +29,3 @@ RUN cd /build \
 RUN adduser wis2user
 USER wis2user
 WORKDIR /home/wis2user
-
-#WORKDIR /

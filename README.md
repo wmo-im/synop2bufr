@@ -26,7 +26,7 @@ To transform SYNOP data file into BUFR:
 
 ```console
 mkdir output-data
-synop2bufr transform --metadata data/metadata.csv --year 2023 --month 03 --output-dir output-data data/A_SMRO01YRBK211200_C_EDZW_20220321120500_12524785.txt
+synop2bufr transform --metadata data/station_list.csv --year 2023 --month 03 --output-dir output-data data/A_SMRO01YRBK211200_C_EDZW_20220321120500_12524785.txt
 ```
 
 ## Usage Guide

@@ -25,7 +25,7 @@ Command line interface (CLI)
 .. code-block:: shell
 
    synop2bufr transform \
-       --metadata <station-metadata.csv> \
+       --metadata <station-list.csv> \
        --output-dir <output-directory-path> \
        --year <year-of-observation> \
        --month <month-of-observation> \

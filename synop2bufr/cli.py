@@ -30,7 +30,7 @@ from synop2bufr import __version__, transform as transform_synop
 
 # Configure logger
 LOGGER = logging.getLogger()
-log_level = os.environ.get("LOG_LEVEL")
+log_level = os.environ.get("LOG_LEVEL", "ERROR")
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     level=getattr(logging, log_level),
@@ -80,7 +80,7 @@ def cli():
 @ click.pass_context
 @ click.argument('synop_file', type=click.File(errors="ignore"))
 @ click.option('--metadata', 'metadata', required=False,
-               default="metadata.csv",
+               default="station_list.csv",
                type=click.File(errors="ignore"),
                help="Name/directory of the station metadata")
 @ click.option('--output-dir', 'output_dir', required=False,

@@ -30,7 +30,8 @@ from synop2bufr import __version__, transform as transform_synop
 
 # Configure logger
 LOGGER = logging.getLogger()
-log_level = os.environ.get("LOG_LEVEL")
+# log_level = os.environ.get("LOG_LEVEL")
+log_level = "ERROR"
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     level=getattr(logging, log_level),

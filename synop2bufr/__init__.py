@@ -33,7 +33,7 @@ from typing import Iterator, Tuple
 from csv2bufr import BUFRMessage
 from pymetdecoder import synop
 
-__version__ = '0.3.0'
+__version__ = '0.3.1'
 
 LOGGER = logging.getLogger(__name__)
 

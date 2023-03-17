@@ -33,7 +33,7 @@ from typing import Iterator, Tuple
 from csv2bufr import BUFRMessage
 from pymetdecoder import synop
 
-__version__ = '0.4.dev0'
+__version__ = '0.3.2'
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1077,6 +1077,8 @@ def transform(data: str, metadata: str, year: int,
         metadata_dict = {}
         tsi_mapping = {}
         for row in reader:
+            if len(row) == 0:
+                continue
             single_row = dict(zip(col_names, row))
             tsi = single_row['traditional_station_identifier']
             try:

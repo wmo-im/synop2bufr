@@ -116,22 +116,36 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     output['month'] = month
 
     if 'obs_time' in decoded:
-        output['day'] = decoded['obs_time']['day']['value']
-        output['hour'] = decoded['obs_time']['hour']['value']
+        try:
+            output['day'] = decoded['obs_time']['day']['value']
+        except:
+            output['day'] = None
+        try:
+            output['hour'] = decoded['obs_time']['hour']['value']
+        except:
+            output['hour'] = None
 
-    # The minute will be 00 unless specified by exact observation time
+            # The minute will be 00 unless specified by exact observation time
     if 'exact_obs_time' in decoded:
-        output['minute'] = decoded['exact_obs_time']['minute']['value']
+        try:
+            output['minute'] = decoded['exact_obs_time']['minute']['value']
+        except:
+            output['minute'] = None
         # Overwrite the hour, because the actual observation may be from
         # the hour before but has been rounded in the YYGGiw group
-        output['hour'] = decoded['exact_obs_time']['hour']['value']
+        try:
+            output['hour'] = decoded['exact_obs_time']['hour']['value']
+        except:
+            output['hour'] = None
     else:
         output['minute'] = 0
 
     # Translate wind instrument flag from the SYNOP code to the BUFR code
     if 'wind_indicator' in decoded:
-        iw = decoded['wind_indicator']['value']
-
+        try:
+            iw = decoded['wind_indicator']['value']
+        except:
+            iw = None
         # In this conversion, we convert bit number to a value (see code table
         # 0 02 002)  # noq
         # Not bit 3 should never be set for synop, units of km/h not reportable
@@ -145,59 +159,74 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             iw_translated = 0b1100  # Wind in knots with anemometer, bits
             # 1 and 2 set # noq
         else:
-            iw_translated = 0b1111  # Missing value
+            iw_translated = None # 0b1111  # Missing value
     else:
-        iw_translated = 0b1111  # Missing value
+        iw_translated = None # 0b1111  # Missing value
 
     output['wind_indicator'] = iw_translated
 
     if 'station_id' in decoded:
-        tsi = decoded['station_id']['value']
-        output['station_id'] = tsi
-        output['block_no'] = tsi[0:2]
-        output['station_no'] = tsi[2:5]
-
+        try:
+            tsi = decoded['station_id']['value']
+            output['station_id'] = tsi
+            output['block_no'] = tsi[0:2]
+            output['station_no'] = tsi[2:5]
+        except:
+            tsi = None
+            output['station_id'] = None
+            output['block_no'] = None
+            output['station_no'] = None
     # ! Removed region and precipitation indicator as they are redundant
 
     # We translate this station type flag from the SYNOP code to the BUFR code
     if 'weather_indicator' in decoded:
-        ix = decoded['weather_indicator']['value']
-        if ix <= 3:
-            ix_translated = 1  # Manned station
-        elif ix == 4:
-            ix_translated = 2  # Hybrid station
-        elif ix > 4 and ix <= 7:
-            ix_translated = 0  # Automatic station
-        else:
-            ix_translated = 3  # Missing value
+        try:
+            ix = decoded['weather_indicator']['value']
+            if ix <= 3:
+                ix_translated = 1  # Manned station
+            elif ix == 4:
+                ix_translated = 2  # Hybrid station
+            elif ix > 4 and ix <= 7:
+                ix_translated = 0  # Automatic station
+            else:
+                ix_translated = None  # Missing value
+        except:
+            ix_translated = None
     else:
-        ix_translated = 3  # Missing value
+        ix_translated = None  # Missing value
 
     output['WMO_station_type'] = ix_translated
 
     # Lowest cloud base is already given in metres, but we specifically select
     # the minimum value  # noq
     # NOTE: By B/C1.4.4.4 the precision of this value is in tens of metres
-    if 'lowest_cloud_base' in decoded and \
-            decoded['lowest_cloud_base'] is not None:
-        output['lowest_cloud_base'] = \
-            round(decoded['lowest_cloud_base']['min'], -1)
+    if 'lowest_cloud_base' in decoded and decoded['lowest_cloud_base'] is not None:  # noqa
+        try:
+            output['lowest_cloud_base'] = round(decoded['lowest_cloud_base']['min'], -1)  # noqa
+        except:
+            output['lowest_cloud_base'] = None
 
     # Visibility is already given in metres
     if 'visibility' in decoded:
-        output['visibility'] = decoded['visibility']['value']
+        try:
+            output['visibility'] = decoded['visibility']['value']
+        except:
+            output['visibility'] = None
 
     # Cloud cover is given in oktas, which we convert to a percentage
     #  NOTE: By B/C10.4.4.1 this percentage is always rounded up
     if 'cloud_cover' in decoded:
-        N_oktas = decoded['cloud_cover']['_code']
-        # If the cloud cover is 9 oktas, this means the sky was obscured and
-        # we keep the value as None
-        if N_oktas == 9:
-            N_percentage = 113
-        else:
-            N_percentage = math.ceil((N_oktas / 8) * 100)
-            output['cloud_cover'] = N_percentage
+        try:
+            N_oktas = decoded['cloud_cover']['_code']
+            # If the cloud cover is 9 oktas, this means the sky was obscured and
+            # we keep the value as None
+            if N_oktas == 9:
+                N_percentage = 113
+            else:
+                N_percentage = math.ceil((N_oktas / 8) * 100)
+                output['cloud_cover'] = N_percentage
+        except:
+            output['cloud_cover'] = None
 
     # Wind direction is already in degrees
     if 'surface_wind' in decoded:
@@ -208,41 +237,56 @@ def parse_synop(message: str, year: int, month: int) -> dict:
         output['wind_time_period'] = -10
 
         if decoded['surface_wind']['direction'] is not None:
-            output['wind_direction'] = \
-                decoded['surface_wind']['direction']['value']
+            try:
+                output['wind_direction'] = decoded['surface_wind']['direction']['value']  # noqa
+            except:
+                output['wind_direction'] = None
 
         # Wind speed in units specified by 'wind_indicator', convert to m/s
         if decoded['surface_wind']['speed'] is not None:
-            ff = decoded['surface_wind']['speed']['value']
+            try:
+                ff = decoded['surface_wind']['speed']['value']
+                # Find the units
+                ff_unit = decoded['wind_indicator']['unit']
 
-            # Find the units
-            ff_unit = decoded['wind_indicator']['unit']
-
-            # If units are knots instead of m/s, convert it to knots
-            if ff_unit == 'KT':
-                ff *= 0.51444
-
-            output['wind_speed'] = ff
+                # If units are knots instead of m/s, convert it to knots
+                if ff_unit == 'KT':
+                    ff *= 0.51444
+                output['wind_speed'] = ff
+            except:
+                output['wind_speed'] = None
 
     # Temperatures are given in Celsius, convert to kelvin and round to 2 dp
     if 'air_temperature' in decoded:
-        output['air_temperature'] = round(
-            decoded['air_temperature']['value'] + 273.15, 2)
+        try:
+            output['air_temperature'] = round(decoded['air_temperature']['value'] + 273.15, 2)  # noqa
+        except:
+            output['air_temperature'] = None
+
     if 'dewpoint_temperature' in decoded:
-        output['dewpoint_temperature'] = round(
-            decoded['dewpoint_temperature']['value'] + 273.15, 2)
+        try:
+            output['dewpoint_temperature'] = round(decoded['dewpoint_temperature']['value'] +273.15, 2)  # noqa
+        except:
+            output['dewpoint_temperature'] = None
 
     # RH is already given in %
     if 'relative_humidity' in decoded:
-        output['relative_humidity'] = decoded['relative_humidity']
+        try:
+            output['relative_humidity'] = decoded['relative_humidity']
+        except:
+            output['relative_humidity'] = None
+
     else:
         # if RH is missing estimate from air temperature and dew point
         # temperature
         #
         # Reference to equation / method required
-
-        A = output.get('air_temperature')
-        D = output.get('dewpoint_temperature')
+        try:
+            A = output['air_temperature']
+            D = output['dewpoint_temperature']
+        except:
+            A = None
+            D = None
 
         if None in (A, D):
             output['relative_humidity'] = None
@@ -260,65 +304,76 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     # Pressure is given in hPa, which we convert to Pa. By B/C 1.3.1,
     # pressure has precision in tens of Pa
     if 'station_pressure' in decoded:
-        output['station_pressure'] = round(
-            decoded['station_pressure']['value'] * 100, -1)
+        try:
+            output['station_pressure'] = round(decoded['station_pressure']['value'] * 100, -1) # noqa
+        except:
+            output['station_pressure'] = None
 
     #  Similar to above. By B/C1.3.2, pressure has precision in tens of Pa
     if 'sea_level_pressure' in decoded:
-        output['sea_level_pressure'] = round(
-            decoded['sea_level_pressure']['value'] * 100, -1)
+        try:
+            output['sea_level_pressure'] = round(decoded['sea_level_pressure']['value'] * 100, -1)  # noqa
+        except:
+            output['sea_level_pressure'] = None
 
     if 'geopotential' in decoded:
-        output['isobaric_surface'] = round(
-            decoded['geopotential']['surface']['value'] * 100, 1)
-        output['geopotential_height'] = \
-            decoded['geopotential']['height']['value']
+        try:
+            output['isobaric_surface'] = round( decoded['geopotential']['surface']['value'] * 100, 1)  # noqa
+        except:
+            output['isobaric_surface'] = None
+        try:
+            output['geopotential_height'] = decoded['geopotential']['height']['value']  # noqa
+        except:
+            output['geopotential_height'] = None
 
     if 'pressure_tendency' in decoded:
         #  By B/C1.3.3, pressure has precision in tens of Pa
-        output['3hr_pressure_change'] = round(
-            decoded['pressure_tendency']['change']['value'] * 100, -1)
-        output['pressure_tendency_characteristic'] = \
-            decoded['pressure_tendency']['tendency']['value']
-    else:
-        output['pressure_tendency_characteristic'] = 15  # Missing value
+        try:
+            output['3hr_pressure_change'] = round(decoded['pressure_tendency']['change']['value'] * 100, -1) # noqa
+        except:
+            output['3hr_pressure_change'] = None
+
+        try:
+            output['pressure_tendency_characteristic'] = decoded['pressure_tendency']['tendency']['value']  # noqa
+        except:
+            output['pressure_tendency_characteristic'] = None
 
     # Precipitation is given in mm, which is equal to kg/m^2 of rain
     if 'precipitation_s1' in decoded:
         # NOTE: When the precipitation measurement RRR has code 990, this
         # represents a trace amount of rain
-        # (<0.01 inches), which pymetdecoder records as 0. I agree with
+        # (<0.01 inches), which pymetdecoder records as 0. I (RTB) agree with
         # this choice, and so no change has been made.
-        output['precipitation_s1'] = \
-            decoded['precipitation_s1']['amount']['value']
-        output['ps1_time_period'] = -1 * \
-            decoded['precipitation_s1']['time_before_obs']['value']
+        try:
+            output['precipitation_s1'] = decoded['precipitation_s1']['amount']['value']  # noqa
+        except:
+            output['precipitation_s1'] = None
+
+        try:
+            output['ps1_time_period'] = -1 * decoded['precipitation_s1']['time_before_obs']['value']  # noqa
+        except:
+            output['ps1_time_period'] = None
 
     # The present and past weather SYNOP codes align with that of BUFR apart
     # from missing values
     if 'present_weather' in decoded:
-        output['present_weather'] = decoded['present_weather']['value']
-    else:
-        output['present_weather'] = 511  # Missing value
+        try:
+            output['present_weather'] = decoded['present_weather']['value']
+        except:
+            output['present_weather'] = None
 
     if 'past_weather' in decoded:
-
-        if decoded['past_weather']['past_weather_1'] is not None:
-            output['past_weather_1'] = \
-                decoded['past_weather']['past_weather_1']['value']
-        else:
-            output['past_weather_1'] = 31  # Missing value
-
-        if decoded['past_weather']['past_weather_2'] is not None:
-            output['past_weather_2'] = \
-                decoded['past_weather']['past_weather_2']['value']
-
-        else:
-            output['past_weather_2'] = 31  # Missing value
-
+        try:
+            output['past_weather_1'] = decoded['past_weather']['past_weather_1']['value']  # noqa
+        except:
+            output['past_weather_1'] = None
+        try:
+            output['past_weather_2'] = decoded['past_weather']['past_weather_2']['value']  # noqa
+        except:
+            output['past_weather_2'] = None
     else:  # Missing values
-        output['past_weather_1'] = 31
-        output['past_weather_2'] = 31
+        output['past_weather_1'] = None
+        output['past_weather_2'] = None
 
     #  The past weather time period is determined by the hour of observation,
     #  as per B/C1.10.1.8.1
@@ -337,34 +392,34 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     # We translate these cloud type flags from the SYNOP codes to the
     # BUFR codes
     if 'cloud_types' in decoded:
-        Cl = decoded['cloud_types']['low_cloud_type']
-        if Cl is not None:
-            Cl = Cl['value']
-            Cl_translated = Cl + 30
-        else:
-            Cl_translated = None
-        output['low_cloud_type'] = Cl_translated
+        try:
+            Cl = decoded['cloud_types']['low_cloud_type']['value'] + 30
+        except:
+            Cl = None
+        output['low_cloud_type'] = Cl
 
-        Cm = decoded['cloud_types']['middle_cloud_type']
-        if Cm is not None:
-            Cm = Cm['value']
-            Cm_translated = Cm + 20
-        else:
-            Cm_translated = None
-        output['middle_cloud_type'] = Cm_translated
+        try:
+            Cm = decoded['cloud_types']['middle_cloud_type']['value'] + 20
+        except:
+            Cm = None
 
-        Ch = decoded['cloud_types']['high_cloud_type']
-        if Ch is not None:
-            Ch = Ch['value']
-            Ch_translated = Ch + 10
-        else:
-            Ch_translated = None
-        output['high_cloud_type'] = Ch_translated
+        output['middle_cloud_type'] = Cm
+
+        try:
+            Ch = decoded['cloud_types']['high_cloud_type']['value'] + 10
+        except:
+            Ch = None
+
+        output['high_cloud_type'] = Ch
 
         if 'low_cloud_amount' in decoded['cloud_types']:
             # Low cloud amount is given in oktas, and by B/C1.4.4.3.1 it
             # stays that way for BUFR
-            N_oktas = decoded['cloud_types']['low_cloud_amount']['value']
+            try:
+                N_oktas = decoded['cloud_types']['low_cloud_amount']['value']
+            except:
+                N_oktas = None
+
             # If the cloud cover is 9 oktas, this means the sky was obscured
             # and we keep the value as None
             if N_oktas == 9:
@@ -378,7 +433,11 @@ def parse_synop(message: str, year: int, month: int) -> dict:
         elif 'middle_cloud_amount' in decoded['cloud_types']:
             # Middle cloud amount is given in oktas, and by B/C1.4.4.3.1 it
             # stays that way for BUFR
-            N_oktas = decoded['cloud_types']['middle_cloud_amount']['value']
+            try:
+                N_oktas = decoded['cloud_types']['middle_cloud_amount']['value']
+            except:
+                N_oktas = None
+
             # If the cloud cover is 9 oktas, this means the sky was obscured
             # and we keep the value as None
             if N_oktas == 9:
@@ -427,19 +486,26 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     #  Group 1 1snTxTxTx - gives maximum temperature over a time period
     # decided by the region
-    if ('maximum_temperature' in decoded and
-            decoded['maximum_temperature'] is not None):
-        #  Convert to Kelvin
-        output['maximum_temperature'] = round(
-            decoded['maximum_temperature']['value'] + 273.15, 2)
+    if ('maximum_temperature' in decoded and decoded['maximum_temperature'] is not None):  # noqa
+        #  Convert to Kelvin and round to required precision
+        try:
+            output['maximum_temperature'] = decoded['maximum_temperature']['value']
+            if output['maximum_temperature'] is not None:
+                output['maximum_temperature'] = round(output['maximum_temperature'] + 273.15, 2)  # noqa
+        except:
+            output['maximum_temperature'] = None
 
-    #  Group 2 2snTnTnTn - gives minimum temperature over a time period
+            #  Group 2 2snTnTnTn - gives minimum temperature over a time period
     # decided by the region
-    if ('minimum_temperature' in decoded and
-            decoded['minimum_temperature'] is not None):
-        #  Convert to Kelvin
-        output['minimum_temperature'] = round(
-            decoded['minimum_temperature']['value'] + 273.15, 2)
+    if ('minimum_temperature' in decoded and decoded['minimum_temperature'] is not None):  # noqa
+        #  Convert to Kelvin and round to required precision
+        try:
+            output['minimum_temperature'] = decoded['minimum_temperature']['value']
+            if output['minimum_temperature'] is not None:
+                output['minimum_temperature'] = round( output['minimum_temperature'] + 273.15, 2)  # noqa
+        except:
+            output['minimum_temperature'] = None
+
     #  Group 3 3Ejjj
     # NOTE: According to SYNOP manual 12.4.5, the group is
     # developed regionally.
@@ -447,35 +513,49 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     # It is either omitted, or it takes form 3EsnTgTg, where
     # Tg is the ground temperature
     if 'ground_state' in decoded:
-
+        # get value
         if decoded['ground_state']['state'] is not None:
-            output['ground_state'] = decoded['ground_state']['state']['value']
+            try:
+                output['ground_state'] = decoded['ground_state']['state']['value']
+            except:
+                output['ground_state'] = None
         else:
-            # By B/C1 a missing value has code 31
-            output['ground_state'] = 31
+            output['ground_state'] = None
 
         if decoded['ground_state']['temperature'] is not None:
-            #  Convert to Kelvin
-            output['ground_temperature'] = round(
-                decoded['ground_state']['temperature']['value'] + 273.15, 2)
+            try:
+                #  Convert to Kelvin
+                output['ground_temperature'] = round( decoded['ground_state']['temperature']['value'] + 273.15, 2)# noqa
+            except:
+                output['ground_temperature'] = None
 
     #  Group 4 4E'sss - gives state of the ground with snow, and the snow
     # depth (not regional like group 3 is)
     if 'ground_state_snow' in decoded:
-
         if decoded['ground_state_snow']['state'] is not None:
             # We translate the snow depth flags from the SYNOP codes to the
             # BUFR codes
-            E = decoded['ground_state_snow']['state']['value']
-            E_translated = E + 10
-            output['ground_state'] = E_translated
-
+            try:
+                E = decoded['ground_state_snow']['state']['value']
+                if E is not None:
+                    output['ground_state'] = E + 10
+                else:
+                    output['ground_state'] = None
+            except:
+                output['ground_state'] = None
         else:  # Missing value
-            output['ground_state'] = 31
+            output['ground_state'] = None
 
-        # Snow depth is given in cm but should be recorded in m
-        snow_depth = decoded['ground_state_snow']['depth']['depth']
-        output['snow_depth'] = snow_depth * 0.01
+        # Snow depth is given in cm but should be encoded in m
+        try:
+            snow_depth = decoded['ground_state_snow']['depth']['depth']  # noqa
+        except:
+            snow_depth = None
+
+        if snow_depth is not None:
+            output['snow_depth'] = snow_depth * 0.01
+        else:
+            output['snow_depth'] = None
 
     #  We now look at group 5, 5j1j2j3j4, which can take many different forms
     # and also have
@@ -485,47 +565,53 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     if 'evapotranspiration' in decoded:
 
         # Evapotranspiration is given in mm, which is equal to kg/m^2 for rain
-        output['evapotranspiration'] = \
-            decoded['evapotranspiration']['amount']['value']
+        try:
+            output['evapotranspiration'] = decoded['evapotranspiration']['amount']['value']  # noqa
+        except:
+            output['evapotranspiration'] = None
 
-        if decoded['evapotranspiration']['type'] is not None:
-            output['evaporation_instrument'] = \
-                decoded['evapotranspiration']['type']['_code']
-
-        else:
-            # Missing value
-            output['evaporation_instrument'] = 15
+        try:
+            if decoded['evapotranspiration']['type'] is not None:
+                output['evaporation_instrument'] = decoded['evapotranspiration']['type']['_code']
+            else:
+                # Missing value
+                output['evaporation_instrument'] = None
+        except:
+            output['evaporation_instrument'] = None
 
     # Temperature change 54g0sndT
     if 'temperature_change' in decoded:
-
         if decoded['temperature_change']['time_before_obs'] is not None:
-            output['tc_time_period'] = -1 * \
-                decoded['temperature_change']['time_before_obs']['value']
+            try:
+                output['tc_time_period'] = -1 * decoded['temperature_change']['time_before_obs']['value']  # noqa
+            except:
+                output['tc_time_period'] = None
 
         if decoded['temperature_change']['change'] is not None:
-            # We do not correct this measurement, as the temperature change is
-            # the same in both degC and K
-            output['temperature_change'] = \
-                decoded['temperature_change']['change']['value']
+            try:
+                output['temperature_change'] = decoded['temperature_change']['change']['value']  # noqa
+            except:
+                output['temperature_change'] = None
 
     # Sunshine amount 55SSS (24hrs) and 553SS (1hr)
-    if ('sunshine' in decoded and
-            decoded['sunshine']['amount'] is not None):
+    if ('sunshine' in decoded and decoded['sunshine']['amount'] is not None):
 
         # The time period remains in hours
-        sun_time = decoded['sunshine']['duration']['value']
+        try:
+            sun_time = decoded['sunshine']['duration']['value']
+        except:
+            sun_time = None
+
+        try:
+            # Sunshine amount should be given in minutes
+            sun_amount = decoded['sunshine']['amount']['value'] * 60
+        except:
+            sun_amount = None
 
         if sun_time == 1:
-            # Sunshine amount should be given in minutes
-            output['sunshine_amount_1hr'] = \
-                decoded['sunshine']['amount']['value'] * 60
-
+            output['sunshine_amount_1hr'] = sun_amount
         elif sun_time == 24:
-            # Sunshine amount should be
-            # given in minutes
-            output['sunshine_amount_24hr'] = \
-                decoded['sunshine']['amount']['value'] * 60
+            output['sunshine_amount_24hr'] = sun_amount
 
     # Cloud drift data 56DLDMDH
     #  By B/C1.6.2 we must convert the direction to a degree bearing
@@ -539,37 +625,57 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     if 'cloud_drift_direction' in decoded:
         if decoded['cloud_drift_direction']['low'] is not None:
-            low_dir = decoded['cloud_drift_direction']['low']['_code']
-
-            # NOTE: If direction code is 0, the clouds are stationary or
-            # there are no clouds.
-            # If direction code is 0, the direction is unknown or the clouds
-            # or invisible.
-            # In both cases, I believe no BUFR entry should be made.
-            if low_dir > 0 and low_dir < 9:
-                output['low_cloud_drift_direction'] = to_bearing(low_dir)
+            try:
+                low_dir = decoded['cloud_drift_direction']['low']['_code']
+                # NOTE: If direction code is 0, the clouds are stationary or
+                # there are no clouds.
+                # If direction code is 0, the direction is unknown or the clouds
+                # or invisible.
+                # In both cases, I believe no BUFR entry should be made.
+                if low_dir > 0 and low_dir < 9:
+                    output['low_cloud_drift_direction'] = to_bearing(low_dir)
+                else:
+                    output['low_cloud_drift_direction'] = None
+            except:
+                output['low_cloud_drift_direction'] = None
 
         if decoded['cloud_drift_direction']['middle'] is not None:
-            middle_dir = decoded['cloud_drift_direction']['middle']['_code']
-            if middle_dir > 0 and middle_dir < 9:
-                output['middle_cloud_drift_direction'] = to_bearing(middle_dir)
+            try:
+                middle_dir = decoded['cloud_drift_direction']['middle']['_code']
+                if middle_dir > 0 and middle_dir < 9:
+                    output['middle_cloud_drift_direction'] = to_bearing(middle_dir)  # noqa
+                else:
+                    output['middle_cloud_drift_direction'] = None
+            except:
+                output['middle_cloud_drift_direction'] = None
 
         if decoded['cloud_drift_direction']['high'] is not None:
-            high_dir = decoded['cloud_drift_direction']['high']['_code']
-            if high_dir > 0 and high_dir < 9:
-                output['high_cloud_drift_direction'] = to_bearing(high_dir)
+            try:
+                high_dir = decoded['cloud_drift_direction']['high']['_code']
+                if high_dir > 0 and high_dir < 9:
+                    output['high_cloud_drift_direction'] = to_bearing(high_dir)
+                else:
+                    output['high_cloud_drift_direction'] = None
+            except:
+                output['high_cloud_drift_direction'] = None
+
 
     # Direction and elevation angle of the clouds 57CDaeC
     if 'cloud_elevation' in decoded:
         if decoded['cloud_elevation']['genus'] is not None:
-            output['e_cloud_genus'] = \
-                decoded['cloud_elevation']['genus']['_code']
+            try:
+                output['e_cloud_genus'] = decoded['cloud_elevation']['genus']['_code']  # noqa
+            except:
+                output['e_cloud_genus'] = None
         else:
             # Missing value
-            output['e_cloud_genus'] = 63
+            output['e_cloud_genus'] = None
 
         if decoded['cloud_elevation']['direction'] is not None:
-            e_dir = decoded['cloud_elevation']['direction']['_code']
+            try:
+                e_dir = decoded['cloud_elevation']['direction']['_code']
+            except:
+                e_dir = None
 
             # NOTE: If direction code is 0, the clouds are stationary or there
             # are no clouds.
@@ -579,21 +685,20 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             if e_dir > 0 and e_dir < 9:
                 # We reuse the to_bearing function from above
                 output['e_cloud_direction'] = to_bearing(e_dir)
-
-        if decoded['cloud_elevation']['elevation'] is not None:
-            if decoded['cloud_elevation']['elevation']['value'] is not None:
-                # The elevation is already given in degrees
-                output['e_cloud_elevation'] = \
-                    decoded['cloud_elevation']['elevation']['value']
+            else:
+                output['e_cloud_direction'] = None
+        try:
+            output['e_cloud_elevation'] = decoded['cloud_elevation']['elevation']['value']  # noqa
+        except:
+            output['e_cloud_elevation'] = None
 
     # Positive 58p24p24p24 or negative 59p24p24p24 changes in surface pressure
     # over 24hrs
     if 'pressure_change' in decoded:
-        if decoded['pressure_change'] is not None:
-            #  SYNOP has units hPa. By B/C1.3.4, pressure change is given in
-            # tens of Pa
-            output['24hr_pressure_change'] = round(
-                decoded['pressure_change']['value']*100, -1)
+        try:
+            output['24hr_pressure_change'] = round(decoded['pressure_change']['value']*100, -1)  # noqa
+        except:
+            output['24hr_pressure_change'] = None
 
     # Radiation supplementary information - the following radiation types are:
     # 1) Positive net radiation
@@ -610,9 +715,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     # are given in J/m^2. We convert this here.
 
     if 'radiation' in decoded:
-
         rad_dict = decoded['radiation']
-
         # Create a function to do the appropriate conversion depending
         # on time period
         def rad_convert(rad, time):
@@ -624,154 +727,167 @@ def parse_synop(message: str, year: int, month: int) -> dict:
                 return 10000 * rad
 
         if 'positive_net' in rad_dict:
-            if rad_dict['positive_net']['value'] is not None:
+            try:
                 rad = rad_dict['positive_net']['value']
-                time = rad_dict['positive_net']['time_before_obs']['value']
-
+                time = rad_dict['positive_net']['time_before_obs']['value']  # noqa
+            except:
+                rad = None
+                time = None
+            if None not in (rad, time):
                 if time == 1:
-                    #  Set positive and convert to J/m^2, rounding to 1000s
-                    # of J/m^2 (B/C1.12.2)
-                    output['net_radiation_1hr'] = \
-                        round(rad_convert(rad, time), -3)
+                    #  Convert to J/m^2,rounding to 1000s of J/m^2 (B/C1.12.2)
+                    output['net_radiation_1hr'] = round(rad_convert(rad, time), -3)  # noqa
                 elif time == 24:
-                    #  Set positive and convert to J/m^2, rounding to 1000s
-                    # of J/m^2 (B/C1.12.2)
-                    output['net_radiation_24hr'] = \
-                        round(rad_convert(rad, time), -3)
+                    #  Convert to J/m^2,rounding to 1000s of J/m^2 (B/C1.12.2)
+                    output['net_radiation_24hr'] = round(rad_convert(rad, time), -3)  # noqa
 
         if 'negative_net' in rad_dict:
-            if rad_dict['negative_net']['value'] is not None:
+            try:
                 rad = rad_dict['negative_net']['value']
-                time = rad_dict['negative_net']['time_before_obs']['value']
+                time = rad_dict['negative_net']['time_before_obs']['value']  # noqa
+            except:
+                rad = None
+                time = None
 
+            if None not in (rad, time):
                 if time == 1:
                     #  Set negative and convert to J/m^2,rounding to 1000s
                     # of J/m^2 (B/C1.12.2)
-                    output['net_radiation_1hr'] = \
-                        -1*round(rad_convert(rad, time), -3)
-                if time == 24:
+                    output['net_radiation_1hr'] = -1 * round(rad_convert(rad, time), -3)  # noqa
+                elif time == 24:
                     #  Set negative and convert to J/m^2,rounding to 1000s
                     # of J/m^2 (B/C1.12.2)
-                    output['net_radiation_24hr'] = \
-                        -1*round(rad_convert(rad, time), -3)
+                    output['net_radiation_24hr'] = -1 * round(rad_convert(rad, time), -3)  # noqa
 
         if 'global_solar' in rad_dict:
-            if rad_dict['global_solar']['value'] is not None:
+            try:
                 rad = rad_dict['global_solar']['value']
                 time = rad_dict['global_solar']['time_before_obs']['value']
+            except:
+                rad = None
+                time = None
 
+            if None not in (rad, time):
                 if time == 1:
-                    #  Convert to J/m^2,rounding to 100s
-                    # of J/m^2 (B/C1.12.2)
-                    output['global_solar_radiation_1hr'] = \
-                        round(rad_convert(rad, time), -2)
+                    #  Convert to J/m^2,rounding to 100s of J/m^2 (B/C1.12.2)
+                    output['global_solar_radiation_1hr'] = round(rad_convert(rad, time), -2)  # noqa
                 elif time == 24:
                     #  Convert to J/m^2,rounding to 100s of J/m^2 (B/C1.12.2)
-                    output['global_solar_radiation_24hr'] = \
-                        round(rad_convert(rad, time), -2)
+                    output['global_solar_radiation_24hr'] = round(rad_convert(rad, time), -2)  # noqa
 
         if 'diffused_solar' in rad_dict:
-            if rad_dict['diffused_solar']['value'] is not None:
+            try:
                 rad = rad_dict['diffused_solar']['value']
                 time = rad_dict['diffused_solar']['time_before_obs']['value']
+            except:
+                rad = None
+                time = None
 
-                if time == 1:
-                    #  Set Convert to J/m^2,rounding to 100s
-                    # of J/m^2 (B/C1.12.2)
-                    output['diffuse_solar_radiation_1hr'] = \
-                        round(rad_convert(rad, time), -2)
-
-                if time == 24:
-                    #  Set Convert to J/m^2,rounding to 100s
-                    # of J/m^2 (B/C1.12.2)
-                    output['diffuse_solar_radiation_24hr'] = \
-                        round(rad_convert(rad, time), -2)
-
-        if 'downward_long_wave' in rad_dict:
-            if rad_dict['downward_long_wave']['value'] is not None:
-                rad = rad_dict['downward_long_wave']['value']
-                time = \
-                    rad_dict['downward_long_wave']['time_before_obs']['value']
-
-                if time == 1:
-                    #  Set positive and convert to J/m^2,rounding to 10000s
-                    # of J/m^2 (B/C1.12.2)
-                    output['long_wave_radiation_1hr'] = \
-                        round(rad_convert(rad, time), -4)
-                if time == 24:
-                    #  Set positive and convert to J/m^2,rounding to 10000s
-                    # of J/m^2 (B/C1.12.2)
-                    output['long_wave_radiation_24hr'] = \
-                        round(rad_convert(rad, time), -4)
-
-        if 'upward_long_wave' in rad_dict:
-            if rad_dict['upward_long_wave']['value'] is not None:
-                rad = rad_dict['upward_long_wave']['value']
-                time = rad_dict['upward_long_wave']['time_before_obs']['value']
-
-                if time == 1:
-                    #  Set negative and convert to J/m^2,rounding to 10000s
-                    # of J/m^2 (B/C1.12.2)
-                    output['long_wave_radiation_1hr'] = \
-                        -1*round(rad_convert(rad, time), -4)
-                if time == 24:
-                    #  Set negative and convert to J/m^2,rounding to 10000s
-                    # of J/m^2 (B/C1.12.2)
-                    output['long_wave_radiation_24hr'] = \
-                        -1*round(rad_convert(rad, time), -4)
-
-        if 'short_wave' in rad_dict:
-            if rad_dict['short_wave']['value'] is not None:
-                rad = rad_dict['short_wave']['value']
-                time = rad_dict['short_wave']['time_before_obs']['value']
-
-                if time == 1:
-                    #  Convert to J/m^2,rounding to 1000s
-                    # of J/m^2 (B/C1.12.2)
-                    output['short_wave_radiation_1hr'] = \
-                        round(rad_convert(rad, time), -3)
-                if time == 24:
-                    #  Convert to J/m^2,rounding to 1000s
-                    # of J/m^2 (B/C1.12.2)
-                    output['short_wave_radiation_24hr'] = \
-                        round(rad_convert(rad, time), -3)
-
-        if 'direct_solar' in rad_dict:
-            if rad_dict['direct_solar']['value'] is not None:
-                rad = rad_dict['direct_solar']['value']
-                time = rad_dict['direct_solar']['time_before_obs']['value']
-
+            if None not in (rad, time):
                 if time == 1:
                     #  Convert to J/m^2,rounding to 100s of J/m^2 (B/C1.12.2)
-                    output['direct_solar_radiation_1hr'] = \
-                        round(rad_convert(rad, time), -2)
-
+                    output['diffuse_solar_radiation_1hr'] = round(rad_convert(rad, time), -2)  # noqa
                 elif time == 24:
                     #  Convert to J/m^2,rounding to 100s of J/m^2 (B/C1.12.2)
-                    output['direct_solar_radiation_24hr'] = \
-                        round(rad_convert(rad, time), -2)
+                    output['diffuse_solar_radiation_24hr'] = round(rad_convert(rad, time), -2)  # noqa
+
+        if 'downward_long_wave' in rad_dict:
+            try:
+                rad = rad_dict['downward_long_wave']['value']
+                time = rad_dict['downward_long_wave']['time_before_obs']['value']  # noqa
+            except:
+                rad = None
+                time = None
+
+            if None not in (rad, time):
+                if time == 1:
+                    #  Set positive and convert to J/m^2,rounding to 10000s
+                    # of J/m^2 (B/C1.12.2)
+                    output['long_wave_radiation_1hr'] = round(rad_convert(rad, time), -4)  # noqa
+                elif time == 24:
+                    #  Set positive and convert to J/m^2,rounding to 10000s
+                    # of J/m^2 (B/C1.12.2)
+                    output['long_wave_radiation_24hr'] = round(rad_convert(rad, time), -4)  # noqa
+
+        if 'upward_long_wave' in rad_dict:
+            try:
+                rad = rad_dict['upward_long_wave']['value']
+                time = rad_dict['upward_long_wave']['time_before_obs']['value']  # noqa
+            except:
+                rad = None
+                time = None
+
+            if None not in (rad, time):
+                if time == 1:
+                    #  Set negative and convert to J/m^2,rounding to 10000s
+                    # of J/m^2 (B/C1.12.2)
+                    output['long_wave_radiation_1hr'] = -1 * round(rad_convert(rad, time), -4)  # noqa
+                elif time == 24:
+                    #  Set negative and convert to J/m^2,rounding to 10000s
+                    # of J/m^2 (B/C1.12.2)
+                    output['long_wave_radiation_24hr'] = -1 * round(rad_convert(rad, time), -4)  # noqa
+
+        if 'short_wave' in rad_dict:
+            try:
+                rad = rad_dict['short_wave']['value']
+                time = rad_dict['short_wave']['time_before_obs']['value']  # noqa
+            except:
+                rad = None
+                time = None
+
+            if None not in (rad, time):
+                if time == 1:
+                    #  Convert to J/m^2,rounding to 1000s of J/m^2 (B/C1.12.2)
+                    output['short_wave_radiation_1hr'] = round(rad_convert(rad, time), -3)  # noqa
+                if time == 24:
+                    #  Convert to J/m^2,rounding to 1000s of J/m^2 (B/C1.12.2)
+                    output['short_wave_radiation_24hr'] = round(rad_convert(rad, time), -3)  # noqa
+
+        if 'direct_solar' in rad_dict:
+            try:
+                rad = rad_dict['direct_solar']['value']
+                time = rad_dict['direct_solar']['time_before_obs']['value']  # noqa
+            except:
+                rad = None
+                time = None
+
+            if None not in (rad, time):
+                if time == 1:
+                    #  Convert to J/m^2,rounding to 100s of J/m^2 (B/C1.12.2)
+                    output['direct_solar_radiation_1hr'] = round(rad_convert(rad, time), -2)
+                elif time == 24:
+                    #  Convert to J/m^2,rounding to 100s of J/m^2 (B/C1.12.2)
+                    output['direct_solar_radiation_24hr'] = round(rad_convert(rad, time), -2)
+
     #  Group 6 6RRRtR - this is the same group as that in section 1, but over
     # a different time period tR
     #  (which is not a multiple of 6 hours as it is in section 1)
     if 'precipitation_s3' in decoded:
         # In SYNOP it is given in mm, and in BUFR it is required to be
         # in kg/m^2 (1mm = 1kg/m^2 for water)
-        output['precipitation_s3'] = \
-            decoded['precipitation_s3']['amount']['value']
-        # The time period is expected to be in hours
-        output['ps3_time_period'] = -1 * \
-            decoded['precipitation_s3']['time_before_obs']['value']
+        try:
+            output['precipitation_s3'] = decoded['precipitation_s3']['amount']['value']  # noqa
+        except:
+            output['precipitation_s3'] = None
+
+        try:
+            # The time period is expected to be in hours
+            output['ps3_time_period'] = -1 * decoded['precipitation_s3']['time_before_obs']['value']  # noqa
+        except:
+            output['ps3_time_period'] = None
 
     #  Group 7 7R24R24R24R24 - this group is the same as group 6, but
     # over a 24 hour time period
     if 'precipitation_24h' in decoded:
         # In SYNOP it is given in mm, and in BUFR it is required to be
         # in kg/m^2 (1mm = 1kg/m^2 for water)
-        output['precipitation_24h'] = \
-            decoded['precipitation_24h']['amount']['value']
+        try:
+            output['precipitation_24h'] = decoded['precipitation_24h']['amount']['value']  # noqa
+        except:
+            output['precipitation_24h'] = None
 
-    #  Group 8 8NsChshs - information about a layer or mass of cloud.
-    #  This group can be repeated for up to 4 cloud genuses that are witnessed,
+    # Group 8 8NsChshs - information about a layer or mass of cloud.
+    # This group can be repeated for up to 4 cloud genuses that are witnessed,
     # by B/C1.4.5.1.1.
 
     # Create number of s3 group 8 clouds variable, in case there is no group 8
@@ -799,32 +915,37 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             automatic_state = bool(output['WMO_station_type'] == 0)
 
             if genus_array[i]['cloud_genus'] is not None:
-                C_code = genus_array[i]['cloud_genus']['_code']
-                output[f'cloud_genus_s3_{i+1}'] = C_code
+                try:
+                    C_code = genus_array[i]['cloud_genus']['_code']
+                    output[f'cloud_genus_s3_{i+1}'] = C_code
 
-                if C_code == 9:  # Cumulonimbus
-                    if automatic_state:
-                        output[f'vs_s3_{i+1}'] = 24
-                    else:
-                        output[f'vs_s3_{i+1}'] = 4
-                else:  # Non-Cumulonimbus
-                    if automatic_state:
-                        output[f'vs_s3_{i+1}'] = i+21
-                    else:
-                        output[f'vs_s3_{i+1}'] = i+1
+                    if C_code == 9:  # Cumulonimbus
+                        if automatic_state:
+                            output[f'vs_s3_{i+1}'] = 24
+                        else:
+                            output[f'vs_s3_{i+1}'] = 4
 
+                    else:  # Non-Cumulonimbus
+                        if automatic_state:
+                            output[f'vs_s3_{i+1}'] = i+21
+                        else:
+                            output[f'vs_s3_{i+1}'] = i+1
+                except:
+                    output[f'vs_s3_{i + 1}'] = None
             else:
                 # Missing value
-                output[f'cloud_genus_s3_{i+1}'] = 63
-
+                output[f'cloud_genus_s3_{i+1}'] = None
                 if automatic_state:
                     output[f'vs_s3_{i+1}'] = 20
                 else:
-                    output[f'vs_s3_{i+1}'] = 63
+                    output[f'vs_s3_{i+1}'] = None
 
             if genus_array[i]['cloud_cover'] is not None:
                 # This is left in oktas just like group 8 in section 1
-                N_oktas = genus_array[i]['cloud_cover']['value']
+                try:
+                    N_oktas = genus_array[i]['cloud_cover']['value']
+                except:
+                    N_oktas = None
 
                 # If the cloud cover is 9 oktas, this means the sky was
                 # obscured and we keep the value as None
@@ -833,16 +954,17 @@ def parse_synop(message: str, year: int, month: int) -> dict:
                     output[f'vs_s3_{i+1}'] = 5
                 else:
                     output[f'cloud_amount_s3_{i+1}'] = N_oktas
-
             else:
                 # Missing value
-                output[f'cloud_amount_s3_{i+1}'] = 15
+                output[f'cloud_amount_s3_{i+1}'] = None
 
             if genus_array[i]['cloud_height'] is not None:
                 # In SYNOP the code table values correspond to heights in m,
                 # which BUFR requires
-                output[f'cloud_height_s3_{i+1}'] = \
-                    genus_array[i]['cloud_height']['value']
+                try:
+                    output[f'cloud_height_s3_{i+1}'] = genus_array[i]['cloud_height']['value']  # noqa
+                except:
+                    output[f'cloud_height_s3_{i + 1}'] = None
 
     #  Group 9 9SpSpspsp is regional supplementary information and is
     #   mostly not present in the B/C1 regulations.
@@ -851,13 +973,14 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     #  These are given and required to be in m/s.
 
     if 'highest_gust' in decoded:
-        if decoded['highest_gust']['gust_1']['speed'] is not None:
-            output['highest_gust_1'] = \
-                decoded['highest_gust']['gust_1']['speed']['value']
-        if decoded['highest_gust']['gust_2']['speed'] is not None:
-            output['highest_gust_2'] = \
-                decoded['highest_gust']['gust_2']['speed']['value']
-
+        try:
+            output['highest_gust_1'] = decoded['highest_gust']['gust_1']['speed']['value']
+        except:
+            output['highest_gust_1'] = None
+        try:
+            output['highest_gust_2'] = decoded['highest_gust']['gust_2']['speed']['value']  # noqa
+        except:
+            output['highest_gust_2'] = None
     #  Regulation 6/12.12.2 in the WMO regional guide tells us that the
     #  1st max gust speed has fixed time period 10 minutes, and the 2nd has
     #  time period equal to the length of the observation time in minutes.

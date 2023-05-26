@@ -1119,6 +1119,7 @@ def extract_individual_synop(data: str) -> list:
                 raise ValueError
 
             d = re.sub(r"\n+", " ", d)
+            d = re.sub(r"\x03", "", d)
             _messages = d.split("=")
             num_msg = len(_messages)
             for idx in range(num_msg):

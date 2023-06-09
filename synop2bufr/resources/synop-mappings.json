@@ -31,6 +31,7 @@
         {"eccodes_key": "#1#wigosLocalIdentifierCharacter", "value":"data:_wsi_local"},
         {"eccodes_key": "#1#latitude", "value": "data:_latitude"},
         {"eccodes_key": "#1#longitude", "value": "data:_longitude"},
+        {"eccodes_key": "#1#heightOfStationGroundAboveMeanSeaLevel", "value":"data:_station_height"},
         {"eccodes_key": "#1#blockNumber", "value": "data:block_no"},
         {"eccodes_key": "#1#stationNumber", "value": "data:station_no"},
         {"eccodes_key": "#1#stationOrSiteName", "value": "data:station_id"},

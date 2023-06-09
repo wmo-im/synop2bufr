@@ -33,7 +33,7 @@ from typing import Iterator, Tuple
 from csv2bufr import BUFRMessage
 from pymetdecoder import synop
 
-__version__ = '0.4.dev1'
+__version__ = '0.4.1'
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1280,6 +1280,7 @@ def transform(data: str, metadata: str, year: int,
             msg['_wsi_local'] = wsi_local
             msg['_latitude'] = latitude
             msg['_longitude'] = longitude
+            msg['_station_height'] = station_height
             conversion_success[tsi] = True
         except Exception:
             conversion_success[tsi] = False

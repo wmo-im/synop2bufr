@@ -21,14 +21,13 @@
 
 import csv
 from copy import deepcopy
-from datetime import (date, datetime)
 from io import StringIO
 import json
 import logging
 import math
 import os
 import re
-from typing import Iterator, Tuple
+from typing import Iterator
 
 from csv2bufr import BUFRMessage
 from pymetdecoder import synop
@@ -1055,30 +1054,6 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     return output, num_s3_clouds, num_s4_clouds
 
 
-def file_extract(file_: str) -> Tuple[list, int, int]:
-    """
-    Extracts the contents of a file and the date of the file
-
-    :param file_: `str` of file
-
-    :returns: `tuple` of messages, year, month
-    """
-
-    # Open and read the file, stripping any new lines
-    with open(file_) as fh:
-        data = fh.read()
-
-    # Obtain the year and month of the data from the file name
-    filename = os.path.basename(file_)
-    year, month = get_date_from_filename(filename)
-
-    # Obtain the individual SYNOP messages from the file contents
-    messages = extract_individual_synop(data)
-
-    # Return the list of messages and the date of the file
-    return messages, year, month
-
-
 def extract_individual_synop(data: str) -> list:
     """
     Separates the SYNOP tac and returns the individual SYNOP
@@ -1142,40 +1117,6 @@ def extract_individual_synop(data: str) -> list:
 
     # Return the messages
     return messages
-
-
-def get_date_from_filename(name: str) -> Tuple[int, int]:
-    """
-    checks whether the input file name conforms to
-    the standards, and if so returns the datetime of the file, otherwise
-    defaults to returning the current year and month.
-
-    :param name: `str` of filepath
-
-    :returns: `list` of year and month of the file
-    """
-
-    # File format is:
-    # pflag_productidentifier_oflag_originator_yyyyMMddhhmmss.extension
-    try:
-        # Returns the part of the string that should be the datetime of the
-        # file (begins with an underscore, but doesn't end with one)
-        # Note: \d represents the decimal part, {8} means it
-        # checks for 8 digits
-        match = re.search(r"_(\d{8})", name)
-        # Strip the datetime from the part of the string
-        d = datetime.strptime(match.group(1), '%Y%m%d')
-        year = d.year
-        month = d.month
-        return year, month
-    except ValueError:
-        LOGGER.error(
-            f"""File {name} is in wrong file format. The current year and month
-            will be used for the conversion."""
-        )
-        year = date.today().year
-        month = date.today().month
-        return year, month
 
 
 def transform(data: str, metadata: str, year: int,
@@ -1248,12 +1189,11 @@ def transform(data: str, metadata: str, year: int,
         # clouds
         try:
             msg, num_s3_clouds, num_s4_clouds = \
-                parse_synop(message, year, month)  # noqa
+                parse_synop(message, year, month)
             # get TSI
             tsi = msg['station_id']
         except Exception as e:
-            LOGGER.error(("Error parsing SYNOP report:"
-                          f" {message}. {str(e)}"))
+            LOGGER.error(f"Error parsing SYNOP report: {message}. {str(e)}")
             continue
 
         # set WSI
@@ -1261,8 +1201,7 @@ def transform(data: str, metadata: str, year: int,
             wsi = tsi_mapping[tsi]
         except Exception:
             conversion_success[tsi] = False
-            LOGGER.warning((f"Station {tsi} not found"
-                            " in station file."))
+            LOGGER.warning(f"Station {tsi} not found in station file")
 
         # parse WSI to get sections
         try:

@@ -21,8 +21,6 @@
 
 import logging
 import os.path
-# import sys
-from datetime import datetime, timezone
 
 import click
 
@@ -69,30 +67,28 @@ def cli_callbacks(f):
     return f
 
 
-@ click.group()
-@ click.version_option(version=__version__)
+@click.group()
+@click.version_option(version=__version__)
 def cli():
     """synop2bufr"""
     pass
 
 
-@ click.command()
-@ click.pass_context
-@ click.argument('synop_file', type=click.File(errors="ignore"))
-@ click.option('--metadata', 'metadata', required=False,
-               default="station_list.csv",
-               type=click.File(errors="ignore"),
-               help="Name/directory of the station metadata")
-@ click.option('--output-dir', 'output_dir', required=False,
-               default=".",
-               help="Directory for the output BUFR files")
-@ click.option('--year', 'year', required=False,
-               default=datetime.now(timezone.utc).year,
-               help="Year that the data corresponds to")
-@ click.option('--month', 'month', required=False,
-               default=datetime.now(timezone.utc).month,
-               help="Month that the data corresponds to")
-@ cli_option_verbosity
+@click.command()
+@click.pass_context
+@click.argument('synop_file', type=click.File(errors="ignore"))
+@click.option('--metadata', 'metadata', required=False,
+              default="station_list.csv",
+              type=click.File(errors="ignore"),
+              help="Name/directory of the station metadata")
+@click.option('--output-dir', 'output_dir', required=False,
+              default=".",
+              help="Directory for the output BUFR files")
+@click.option('--year', 'year', required=True,
+              help="Year that the data corresponds to")
+@click.option('--month', 'month', required=True,
+              help="Month that the data corresponds to")
+@cli_option_verbosity
 def transform(ctx, synop_file, metadata, output_dir, year, month, verbosity):
 
     try:

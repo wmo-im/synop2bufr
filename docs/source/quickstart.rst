@@ -10,7 +10,7 @@ For example, the command line interface reads in data from a text file, converts
 
 .. code-block:: shell
 
-   synop2bufr transform \
+   synop2bufr data transform \
        --metadata <station-metadata.csv> \
        --output-dir <output-directory-path> \
        --year <year-of-observation> \
@@ -24,7 +24,7 @@ Command line interface (CLI)
 
 .. code-block:: shell
 
-   synop2bufr transform \
+   synop2bufr data transform \
        --metadata <station-list.csv> \
        --output-dir <output-directory-path> \
        --year <year-of-observation> \

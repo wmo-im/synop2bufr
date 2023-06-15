@@ -73,7 +73,7 @@ def cli():
     """synop2bufr"""
     pass
 
-
+  
 @click.command()
 @click.pass_context
 @click.argument('synop_file', type=click.File(errors="ignore"))
@@ -104,4 +104,5 @@ def transform(ctx, synop_file, metadata, output_dir, year, month, verbosity):
             fh.write(item["bufr4"])
 
 
-cli.add_command(transform)
+data.add_command(transform)
+cli.add_command(data)

@@ -73,7 +73,13 @@ def cli():
     """synop2bufr"""
     pass
 
-  
+
+@click.group()
+def data():
+    """data utilities"""
+    pass
+
+
 @click.command()
 @click.pass_context
 @click.argument('synop_file', type=click.File(errors="ignore"))

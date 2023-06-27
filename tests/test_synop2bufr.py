@@ -71,7 +71,6 @@ def test_conversion(single_message):
     # We now need to check that most the dictionary items are what we expect
     assert d['station_id'] == "15001"
     assert d['day'] == 21
-    assert d['wind_indicator'] == 8
     assert d['WMO_station_type'] == 0
     assert d['lowest_cloud_base'] == 600
     assert d['visibility'] == 1500
@@ -134,9 +133,9 @@ def test_bufr(multiple_messages, metadata_string):
     msgs = {}
     for item in result:
         msgs[item['_meta']['id']] = item
-    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == 'c99408ed63070de0919208b23aacbbd2'  # noqa
-    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == '40a5cc35b454da20c14af88c711d071f'  # noqa
-    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == '86bc25026de14f9f1cba2e449740c0cd'  # noqa
+    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == '1673febbb27d4ec5a009a96053e513af'  # noqa
+    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == '4e05f1511e770bc8a721a71c6db35fc9'  # noqa
+    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == 'd82ee99c9aee02ada7ccfb248ded7351'  # noqa
 
 
 def test_invalid_separation():

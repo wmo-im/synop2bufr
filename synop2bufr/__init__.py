@@ -41,8 +41,9 @@ FAILED = 0
 PASSED = 1
 
 # Enumerate the keys
-_keys = ['report_type', 'year', 'month', 'day', 'hour', 'minute',
-         'wind_indicator', 'block_no', 'station_no', 'station_id', 'region',
+_keys = ['report_type', 'year', 'month', 'day',
+         'hour', 'minute',
+         'block_no', 'station_no', 'station_id', 'region',
          'WMO_station_type',
          'lowest_cloud_base', 'visibility', 'cloud_cover',
          'time_significance', 'wind_time_period',
@@ -145,24 +146,16 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             iw = decoded['wind_indicator']['value']
         except Exception:
             iw = None
-        # In this conversion, we convert bit number to a value (see code table
-        # 0 02 002)  # noq
-        # Not bit 3 should never be set for synop, units of km/h not reportable
-        if iw == 0:
-            iw_translated = 0b0000  # Wind in m/s, default, no bits set
-        elif iw == 1:
-            iw_translated = 0b1000  # Wind in m/s with anemometer bit 1 (left most) set  # noqa
-        elif iw == 3:
-            iw_translated = 0b0100  # Wind in knots, bit 2 set
-        elif iw == 4:
-            iw_translated = 0b1100  # Wind in knots with anemometer, bits
-            # 1 and 2 set # noq
-        else:
-            iw_translated = None  # 0b1111  # Missing value
-    else:
-        iw_translated = None  # 0b1111  # Missing value
 
-    output['wind_indicator'] = iw_translated
+        # If iw = 1 or 4, the wind was obtained from an
+        # anemometer and thus the corresponding wind data
+        # should be encoded
+        if iw == 1 or iw == 4:
+            ENCODE_WIND = True
+        else:
+            ENCODE_WIND = False
+    else:
+        ENCODE_WIND = False
 
     if 'station_id' in decoded:
         try:
@@ -228,7 +221,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             output['cloud_cover'] = None
 
     # Wind direction is already in degrees
-    if 'surface_wind' in decoded:
+    if ('surface_wind' in decoded) and ENCODE_WIND:
         # See B/C1.10.5.3
         # NOTE: Every time period in the following code shall be a negative number,  # noqa
         # to indicate measurements have been taken up until the present.
@@ -264,7 +257,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     if 'dewpoint_temperature' in decoded:
         try:
-            output['dewpoint_temperature'] = round(decoded['dewpoint_temperature']['value'] +273.15, 2)  # noqa
+            output['dewpoint_temperature'] = round(decoded['dewpoint_temperature']['value'] + 273.15, 2)  # noqa
         except Exception:
             output['dewpoint_temperature'] = None
 
@@ -304,7 +297,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     # pressure has precision in tens of Pa
     if 'station_pressure' in decoded:
         try:
-            output['station_pressure'] = round(decoded['station_pressure']['value'] * 100, -1) # noqa
+            output['station_pressure'] = round(decoded['station_pressure']['value'] * 100, -1)  # noqa
         except Exception:
             output['station_pressure'] = None
 
@@ -317,7 +310,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     if 'geopotential' in decoded:
         try:
-            output['isobaric_surface'] = round( decoded['geopotential']['surface']['value'] * 100, 1)  # noqa
+            output['isobaric_surface'] = round(decoded['geopotential']['surface']['value'] * 100, 1)  # noqa
         except Exception:
             output['isobaric_surface'] = None
         try:
@@ -328,7 +321,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     if 'pressure_tendency' in decoded:
         #  By B/C1.3.3, pressure has precision in tens of Pa
         try:
-            output['3hr_pressure_change'] = round(decoded['pressure_tendency']['change']['value'] * 100, -1) # noqa
+            output['3hr_pressure_change'] = round(decoded['pressure_tendency']['change']['value'] * 100, -1)  # noqa
         except Exception:
             output['3hr_pressure_change'] = None
 
@@ -501,7 +494,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
         try:
             output['minimum_temperature'] = decoded['minimum_temperature']['value']  # noqa
             if output['minimum_temperature'] is not None:
-                output['minimum_temperature'] = round( output['minimum_temperature'] + 273.15, 2)  # noqa
+                output['minimum_temperature'] = round(output['minimum_temperature'] + 273.15, 2)  # noqa
         except Exception:
             output['minimum_temperature'] = None
 
@@ -524,7 +517,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
         if decoded['ground_state']['temperature'] is not None:
             try:
                 #  Convert to Kelvin
-                output['ground_temperature'] = round( decoded['ground_state']['temperature']['value'] + 273.15, 2)  # noqa
+                output['ground_temperature'] = round(decoded['ground_state']['temperature']['value'] + 273.15, 2)  # noqa
             except Exception:
                 output['ground_temperature'] = None
 
@@ -971,7 +964,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     #  wind gust speed for region VI (groups 910fmfm and 911fxfx).
     #  These are given and required to be in m/s.
 
-    if 'highest_gust' in decoded:
+    if ('highest_gust' in decoded) and ENCODE_WIND:
         try:
             output['highest_gust_1'] = decoded['highest_gust']['gust_1']['speed']['value']  # noqa
         except Exception:
@@ -1230,6 +1223,20 @@ def transform(data: str, metadata: str, year: int,
                 LOGGER.warning((f"Invalid WSI ({wsi}) found in station file,"
                                 " unable to parse"))
 
+        # Write message to CSV file
+        try:
+            with open("decoded_synop.csv", "a", newline="") as output_csv:
+                dict_writer = csv.DictWriter(output_csv, msg.keys())
+
+                # Check if CSV file is empty before adding headers
+                if os.stat("decoded_synop.csv").st_size == 0:
+                    dict_writer.writeheader()
+
+                # Write data to rows
+                dict_writer.writerow(msg)
+        except Exception:
+            LOGGER.warning(f"Unable to write report of station {tsi} to CSV")
+
         for idx in range(num_s3_clouds):
             # Build the dictionary of mappings for section 3 group 8NsChshs
 
@@ -1313,6 +1320,7 @@ def transform(data: str, metadata: str, year: int,
         # parse
         if conversion_success[tsi]:
             try:
+                # Parse to BUFRMessage object
                 message.parse(msg, mapping)
             except Exception as e:
                 LOGGER.error(e)

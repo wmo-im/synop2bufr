@@ -22,7 +22,7 @@
         {"eccodes_key": "typicalDay", "value": "data:day"},
         {"eccodes_key": "typicalHour", "value": "data:hour"},
         {"eccodes_key": "typicalMinute", "value": "data:minute"},
-        {"eccodes_key": "unexpandedDescriptors", "value":"array:301150, 307080"}
+        {"eccodes_key": "unexpandedDescriptors", "value":"array:301150, 307096"}
     ],
     "data": [
         {"eccodes_key": "#1#wigosIdentifierSeries", "value":"data:_wsi_series"},
@@ -50,7 +50,6 @@
         {"eccodes_key": "#1#airTemperature", "value": "data:air_temperature"},
         {"eccodes_key": "#1#dewpointTemperature", "value": "data:dewpoint_temperature"},
         {"eccodes_key": "#1#relativeHumidity", "value": "data:relative_humidity"},
-        {"eccodes_key": "#1#instrumentationForWindMeasurement", "value": "data:wind_indicator"},
         {"eccodes_key": "#1#timeSignificance", "value": "const:2"},
         {"eccodes_key": "#10#timePeriod", "value": "const:-10"},
         {"eccodes_key": "#1#windDirection", "value": "data:wind_direction"},

@@ -39,7 +39,6 @@ nosetests.xml
 .pytest_cache
 *.bufr4
 *.geojson
-decoded_synop.csv
 logs
 .vscode/
 .vscode/settings.json

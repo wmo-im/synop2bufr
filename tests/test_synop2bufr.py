@@ -27,7 +27,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 @pytest.fixture
-def multiple_messages():
+def multiple_reports():
     return """AAXX 21121
 15015 02999 02501 10103 21090 39765 42952 57020 60001=
 15020 02997 23104 10130 21075 30177 40377 58020 60001 81041=
@@ -36,7 +36,7 @@ def multiple_messages():
 
 
 @pytest.fixture
-def single_message():
+def single_report():
     return """AAXX 21121
 15001 05515 32931 10103 21090 39765 42250 57020 60071 72006 82110 91155
  333 10178 21073 34101 55055 00010 20003 30002 50001 60004
@@ -47,30 +47,32 @@ def single_message():
 
 @pytest.fixture
 def metadata_string():
-    md = "station_name,wigos_station_identifier,traditional_station_identifier,facility_type,latitude,longitude,elevation,territory_name,wmo_region\n" + \
-            "OCNA SUGATAG,0-20000-0-15015,15015,Land (fixed),47.77706163,23.94046026,503,Romania,6\n" + \
-            "BOTOSANI,0-20000-0-15020,15020,Land (fixed),47.73565324,26.64555017,161,Romania,6\n" + \
-            "IASI,0-20000-0-15090,15090,Land (fixed),47.16333333,27.62722222,74.29,Romania,6"  # noqa
+    md = "station_name,wigos_station_identifier,traditional_station_identifier,facility_type,latitude,longitude,elevation,barometer_height,territory_name,wmo_region\n" + \
+            "OCNA SUGATAG,0-20000-0-15015,15015,Land (fixed),47.77706163,23.94046026,503,503,Romania,6\n" + \
+            "BOTOSANI,0-20000-0-15020,15020,Land (fixed),47.73565324,26.64555017,161,161,Romania,6\n" + \
+            "IASI,0-20000-0-15090,15090,Land (fixed),47.16333333,27.62722222,74.29,74.29,Romania,6"  # noqa
     return md
 
 
-def test_message_separation(multiple_messages):
-    # Extract each message
-    msg_list = extract_individual_synop(multiple_messages)
+def test_report_separation(multiple_reports):
+    # Extract each report
+    msg_list = extract_individual_synop(multiple_reports)
     assert len(msg_list) == 3
-    # Assert each message has been extracted as intended
+    # Assert each report has been extracted as intended
     assert msg_list[0] == "AAXX 21121 15015 02999 02501 10103 21090 39765 42952 57020 60001"  # noqa
     assert msg_list[1] == "AAXX 21121 15020 02997 23104 10130 21075 30177 40377 58020 60001 81041"  # noqa
     assert msg_list[2] == "AAXX 21121 15090 02997 53102 10139 21075 30271 40364 58031 60001 82046"  # noqa
 
 
-def test_conversion(single_message):
-    # Get the returned dictionary from the message, using a random
+def test_conversion(single_report):
+    # Get the returned dictionary from the report, using a random
     # year and month
-    d, num_s3_clouds, num_s4_clouds = parse_synop(single_message, 2000, 1)
+    d, num_s3_clouds, num_s4_clouds = parse_synop(single_report, 2000, 1)
     # We now need to check that most the dictionary items are what we expect
     assert d['station_id'] == "15001"
     assert d['day'] == 21
+    assert d['hour'] == 11
+    assert d['minute'] == 55
     assert d['WMO_station_type'] == 0
     assert d['lowest_cloud_base'] == 600
     assert d['visibility'] == 1500
@@ -93,10 +95,12 @@ def test_conversion(single_message):
     assert d['low_cloud_type'] == 31
     assert d['middle_cloud_type'] == 21
     assert d['high_cloud_type'] == 10
-    assert d['hour'] == 11
-    assert d['minute'] == 55
     assert d['maximum_temperature'] == 290.95
     assert d['minimum_temperature'] == 265.85
+    assert d['maximum_temperature_period_start'] == -12
+    assert d['maximum_temperature_period_end'] == 0
+    assert d['minimum_temperature_period_start'] == -12
+    assert d['minimum_temperature_period_end'] == 0
     assert d['ground_state'] == 4
     assert d['ground_temperature'] == 272.15
     assert d['sunshine_amount_24hr'] == 330
@@ -128,14 +132,14 @@ def test_conversion(single_message):
     assert num_s4_clouds == 2
 
 
-def test_bufr(multiple_messages, metadata_string):
-    result = transform(multiple_messages, metadata_string, 2022, 3)
+def test_bufr(multiple_reports, metadata_string):
+    result = transform(multiple_reports, metadata_string, 2022, 3)
     msgs = {}
     for item in result:
         msgs[item['_meta']['id']] = item
-    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == '1673febbb27d4ec5a009a96053e513af'  # noqa
-    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == '4e05f1511e770bc8a721a71c6db35fc9'  # noqa
-    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == 'd82ee99c9aee02ada7ccfb248ded7351'  # noqa
+    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == 'e216f684eac7eee6b33bee3acad197d4'  # noqa
+    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == 'e14419555ba882fc315f356f8ad9e3f8'  # noqa
+    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == '53be05ccd3be798ebe41168e0ca0450c'  # noqa
 
 
 def test_invalid_separation():
@@ -149,7 +153,7 @@ def test_invalid_separation():
 15090 02997 53102 10139 21075 30271 40364 58031 60001 82046"""
 
     with pytest.raises(Exception) as e:
-        # Attempt to extract each message
+        # Attempt to extract each report
         extract_individual_synop(missing_delimiter)
         assert str(
             e.value) == (
@@ -165,7 +169,7 @@ def test_no_type():
     39765 42250 57020 60071 72006 82110 91155="""
 
     with pytest.raises(Exception) as e:
-        # Attempt to decode the message
+        # Attempt to decode the report
         extract_individual_synop(
             missing_station_type)
         assert str(

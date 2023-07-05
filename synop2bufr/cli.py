@@ -98,16 +98,38 @@ def data():
 def transform(ctx, synop_file, metadata, output_dir, year, month, verbosity):
 
     try:
-        result = transform_synop(synop_file.read(), metadata.read(),
-                                 year, month)
+        # Get content from synop file
+        content = synop_file.read()
+
+        # Split multiple messages by GTS end of message signal NNNN
+        messages = content.upper().split("NNNN")
+
+        # Remove leading or trailing whitespaces from these messages
+        # and ignore empty messages after the final NNNN
+        messages = [msg.strip() for msg in messages if msg != ""]
+
+        # Read metadata file contents as a string
+        metadata_string = metadata.read()
+
+        # Transform each message to BUFR files
+        for synop_msg in messages:
+
+            try:
+                result = transform_synop(synop_msg,
+                                         metadata_string,
+                                         year, month)
+
+            except Exception as e:
+                raise click.ClickException(e)
+
+            for item in result:
+                key = item['_meta']["id"]
+                bufr_filename = f"{output_dir}{os.sep}{key}.bufr4"
+                with open(bufr_filename, "wb") as fh:
+                    fh.write(item["bufr4"])
+
     except Exception as e:
         raise click.ClickException(e)
-
-    for item in result:
-        key = item['_meta']["id"]
-        bufr_filename = f"{output_dir}{os.sep}{key}.bufr4"
-        with open(bufr_filename, "wb") as fh:
-            fh.write(item["bufr4"])
 
 
 data.add_command(transform)

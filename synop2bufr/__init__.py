@@ -32,7 +32,7 @@ from typing import Iterator
 from csv2bufr import BUFRMessage
 from pymetdecoder import synop
 
-__version__ = '0.4.1'
+__version__ = '0.5.0'
 
 LOGGER = logging.getLogger(__name__)
 
@@ -56,9 +56,13 @@ _keys = ['report_type', 'year', 'month', 'day',
          'cloud_vs_s1', 'cloud_amount_s1', 'low_cloud_type',
          'middle_cloud_type', 'high_cloud_type',
          'maximum_temperature', 'minimum_temperature',
+         'maximum_temperature_period_start',
+         'maximum_temperature_period_end',
+         'minimum_temperature_period_start',
+         'minimum_temperature_period_end',
          'ground_state', 'ground_temperature', 'snow_depth',
          'evapotranspiration', 'evaporation_instrument',
-         'temperature_change', 'tc_time_period',
+         'temperature_change',
          'sunshine_amount_1hr', 'sunshine_amount_24hr',
          'low_cloud_drift_direction', 'low_cloud_drift_vs',
          'middle_cloud_drift_direction', 'middle_cloud_drift_vs',
@@ -168,7 +172,14 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             output['station_id'] = None
             output['block_no'] = None
             output['station_no'] = None
-    # ! Removed region and precipitation indicator as they are redundant
+    # ! Removed precipitation indicator as it is redundant
+
+    # Get region of report
+    if 'region' in decoded:
+        try:
+            output['region'] = decoded['region']['value']
+        except Exception:
+            output['region'] = None
 
     # We translate this station type flag from the SYNOP code to the BUFR code
     if 'weather_indicator' in decoded:
@@ -228,25 +239,31 @@ def parse_synop(message: str, year: int, month: int) -> dict:
         output['time_significance'] = 2
         output['wind_time_period'] = -10
 
-        if decoded['surface_wind']['direction'] is not None:
-            try:
-                output['wind_direction'] = decoded['surface_wind']['direction']['value']  # noqa
-            except Exception:
-                output['wind_direction'] = None
+        try:
 
-        # Wind speed in units specified by 'wind_indicator', convert to m/s
-        if decoded['surface_wind']['speed'] is not None:
-            try:
-                ff = decoded['surface_wind']['speed']['value']
-                # Find the units
-                ff_unit = decoded['wind_indicator']['unit']
+            if decoded['surface_wind']['direction'] is not None:
+                try:
+                    output['wind_direction'] = decoded['surface_wind']['direction']['value']  # noqa
+                except Exception:
+                    output['wind_direction'] = None
 
-                # If units are knots instead of m/s, convert it to knots
-                if ff_unit == 'KT':
-                    ff *= 0.51444
-                output['wind_speed'] = ff
-            except Exception:
-                output['wind_speed'] = None
+            # Wind speed in units specified by 'wind_indicator', convert to m/s
+            if decoded['surface_wind']['speed'] is not None:
+                try:
+                    ff = decoded['surface_wind']['speed']['value']
+                    # Find the units
+                    ff_unit = decoded['wind_indicator']['unit']
+
+                    # If units are knots instead of m/s, convert it to knots
+                    if ff_unit == 'KT':
+                        ff *= 0.51444
+                    output['wind_speed'] = ff
+                except Exception:
+                    output['wind_speed'] = None
+
+        except Exception:
+            output['wind_direction'] = None
+            output['wind_speed'] = None
 
     # Temperatures are given in Celsius, convert to kelvin and round to 2 dp
     if 'air_temperature' in decoded:
@@ -264,7 +281,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     # RH is already given in %
     if 'relative_humidity' in decoded:
         try:
-            output['relative_humidity'] = decoded['relative_humidity']
+            output['relative_humidity'] = decoded['relative_humidity']['value']
         except Exception:
             output['relative_humidity'] = None
 
@@ -484,10 +501,11 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             output['maximum_temperature'] = decoded['maximum_temperature']['value']  # noqa
             if output['maximum_temperature'] is not None:
                 output['maximum_temperature'] = round(output['maximum_temperature'] + 273.15, 2)  # noqa
+
         except Exception:
             output['maximum_temperature'] = None
 
-            #  Group 2 2snTnTnTn - gives minimum temperature over a time period
+    #  Group 2 2snTnTnTn - gives minimum temperature over a time period
     # decided by the region
     if ('minimum_temperature' in decoded and decoded['minimum_temperature'] is not None):  # noqa
         #  Convert to Kelvin and round to required precision
@@ -497,6 +515,65 @@ def parse_synop(message: str, year: int, month: int) -> dict:
                 output['minimum_temperature'] = round(output['minimum_temperature'] + 273.15, 2)  # noqa
         except Exception:
             output['minimum_temperature'] = None
+
+    # Now calculate the associated time periods for the max and min temps
+    try:
+        if output['region'] in ['Antarctic', 'I', 'II', 'III', 'VI']:
+            # Extremes recorded over past 12 hours
+            output['maximum_temperature_period_start'] = -12
+            output['minimum_temperature_period_start'] = -12
+
+        elif output['region'] == 'V':
+            # Extremes recorded over past 24 hours
+            output['maximum_temperature_period_start'] = -24
+            output['minimum_temperature_period_start'] = -24
+
+        elif output['region'] == 'IV':
+            # If time is 0000 UTC, extremes recorded over 12 and 18
+            # hours respectively
+            if output['hour'] == 0:
+                output['maximum_temperature_period_start'] = -12
+                output['minimum_temperature_period_start'] = -18
+
+            # If time is 0600 UTC, extremes recorded over 24 hours
+            elif output['hour'] == 6:
+                output['maximum_temperature_period_start'] = -24
+                output['minimum_temperature_period_start'] = -24
+
+            # If time is 1200 UTC, maximum is recorded over the previous
+            # day and the minimum is recorded over the previous 12 hours
+            elif output['hour'] == 12:
+                output['maximum_temperature_period_start'] = -36
+                output['minimum_temperature_period_start'] = -12
+
+            # If time is 1800 UTC, extremes recorded over 12 and 24
+            # hours respectively
+            elif output['hour'] == 18:
+                output['maximum_temperature_period_start'] = -12
+                output['minimum_temperature_period_start'] = -24
+
+        # We now set the end of the time periods to be the time of the
+        # observation (0), unless it is the maximum temperature of
+        # the previous calendar day (when the time period started
+        # 36 hours before the observation)
+        if output['maximum_temperature_period_start'] == -36:
+            output['maximum_temperature_period_end'] = -12
+        else:
+            output['maximum_temperature_period_end'] = 0
+
+        # NOTE: I believe the minimum temperature time period always ends
+        # at the time of the observation, even for region III
+        # (see pg. 97 of the regional manual on codes). However, this
+        # is contradicted the BUFR manual (note 2 on pg. 1069) thus
+        # we define this as a variable rather than a constant in the mapping
+        # file in case changes need to be made in the future.
+        output['minimum_temperature_period_end'] = 0
+
+    except Exception:
+        output['maximum_temperature_period_start'] = None
+        output['minimum_temperature_period_start'] = None
+        output['maximum_temperature_period_end'] = None
+        output['minimum_temperature_period_end'] = None
 
     #  Group 3 3Ejjj
     # NOTE: According to SYNOP manual 12.4.5, the group is
@@ -573,11 +650,6 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     # Temperature change 54g0sndT
     if 'temperature_change' in decoded:
-        if decoded['temperature_change']['time_before_obs'] is not None:
-            try:
-                output['tc_time_period'] = -1 * decoded['temperature_change']['time_before_obs']['value']  # noqa
-            except Exception:
-                output['tc_time_period'] = None
 
         if decoded['temperature_change']['change'] is not None:
             try:
@@ -1204,6 +1276,7 @@ def transform(data: str, metadata: str, year: int,
             latitude = metadata_dict[wsi]["latitude"]
             longitude = metadata_dict[wsi]["longitude"]
             station_height = metadata_dict[wsi]["elevation"]
+            barometer_height = metadata_dict[wsi]["barometer_height"]
 
             # add these values to the data dictionary
             msg['_wsi_series'] = wsi_series
@@ -1213,6 +1286,7 @@ def transform(data: str, metadata: str, year: int,
             msg['_latitude'] = latitude
             msg['_longitude'] = longitude
             msg['_station_height'] = station_height
+            msg['_barometer_height'] = barometer_height
             conversion_success[tsi] = True
         except Exception:
             conversion_success[tsi] = False
@@ -1220,22 +1294,8 @@ def transform(data: str, metadata: str, year: int,
             if wsi == "":
                 LOGGER.warning(f"Missing WSI for station {tsi}")
             else:
-                LOGGER.warning((f"Invalid WSI ({wsi}) found in station file,"
-                                " unable to parse"))
-
-        # Write message to CSV file
-        try:
-            with open("decoded_synop.csv", "a", newline="") as output_csv:
-                dict_writer = csv.DictWriter(output_csv, msg.keys())
-
-                # Check if CSV file is empty before adding headers
-                if os.stat("decoded_synop.csv").st_size == 0:
-                    dict_writer.writeheader()
-
-                # Write data to rows
-                dict_writer.writerow(msg)
-        except Exception:
-            LOGGER.warning(f"Unable to write report of station {tsi} to CSV")
+                LOGGER.warning((f"Invalid metadata for station {tsi} found"
+                                " station file, unable to parse"))
 
         for idx in range(num_s3_clouds):
             # Build the dictionary of mappings for section 3 group 8NsChshs
@@ -1298,7 +1358,7 @@ def transform(data: str, metadata: str, year: int,
         # At this point we have a dictionary for the data, a
         # dictionary of the mappings and the metadata
         # The last step is to convert to BUFR.
-        unexpanded_descriptors = [301150, 307080]
+        unexpanded_descriptors = [301150, 307096]
         short_delayed_replications = []
         # update replications
         delayed_replications = [max(1, num_s3_clouds), max(1, num_s4_clouds)]
@@ -1345,6 +1405,23 @@ def transform(data: str, metadata: str, year: int,
 
             # now identifier based on WSI and observation date as identifier
             isodate = message.get_datetime().strftime('%Y%m%dT%H%M%S')
+
+            # Write message to CSV file
+            try:
+                with open(f"decoded_{isodate}.csv",
+                          "a", newline="") as output_csv:
+                    dict_writer = csv.DictWriter(output_csv, msg.keys())
+
+                    # Check if CSV file is empty before adding headers
+                    if os.stat(f"decoded_{isodate}.csv").st_size == 0:
+                        dict_writer.writeheader()
+
+                    # Write data to rows
+                    dict_writer.writerow(msg)
+            except Exception:
+                LOGGER.warning(
+                    f"Unable to write report of station {tsi} to CSV")
+
             rmk = f"WIGOS_{wsi}_{isodate}"
 
             # now additional metadata elements

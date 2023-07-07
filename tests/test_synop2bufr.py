@@ -141,16 +141,17 @@ def test_conversion(single_report):
     assert num_s4_clouds == 2
 
 
-def test_bufr(multiple_reports_307080, metadata_string):
-    result = transform(multiple_reports_307080,
-                       metadata_string, 2022, 3)
+def test_bufr_307080(multiple_reports_307080, metadata_string):
+    result = transform(
+        multiple_reports_307080, metadata_string, 2022, 3
+    )
     msgs = {}
     for item in result:
         msgs[item['_meta']['id']] = item
     # Test the md5 keys
-    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == '27c990045879acc2eedddb7fdc70db4d'  # noqa
-    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == '9db622c40d53aae4ce4f38a658f36d86'  # noqa
-    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == '89f424b9fc38a6db69c7b195bd71d92f'  # noqa
+    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == '603e1c2c25591a8d4213f339a1ce3b52'  # noqa
+    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == '320ad7f1c3f7940a3059ca04dbb6d74a'  # noqa
+    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == '3215ebdc66707c46458d2bbacb49427e'  # noqa
 
     # Test the bufr template used for all the reports
     # (they should be the same for every report)
@@ -159,9 +160,10 @@ def test_bufr(multiple_reports_307080, metadata_string):
     assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['template'] == 307080  # noqa
 
 
-def test_bufr(multiple_reports_307096, metadata_string):
-    result = transform(multiple_reports_307096,
-                       metadata_string, 2022, 3)
+def test_bufr_307096(multiple_reports_307096, metadata_string):
+    result = transform(
+        multiple_reports_307096, metadata_string, 2022, 3
+    )
     msgs = {}
     for item in result:
         msgs[item['_meta']['id']] = item

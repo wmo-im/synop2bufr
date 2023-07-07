@@ -1249,7 +1249,7 @@ def transform(data: str, metadata: str, year: int,
             mapping = deepcopy(_mapping_307096)
         else:
             # Use the old template otherwise
-            bufr_template = 308070
+            bufr_template = 307080
             # Get mapping template, this needs to be
             # reloaded everytime as each SYNOP can have a
             # different number of replications

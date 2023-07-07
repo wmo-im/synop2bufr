@@ -1202,6 +1202,7 @@ def transform(data: str, metadata: str, year: int,
         except Exception:
             conversion_success[tsi] = False
             LOGGER.warning(f"Station {tsi} not found in station file")
+            wsi = None
 
         # parse WSI to get sections
         try:

@@ -111,19 +111,12 @@ class processor(BaseProcessor):
         This method is invoked by pygeoapi when this class is set as a
         `process` type resource in pygeoapi config file.
 
-        :param data: It is the value of `inputs` passed in payload. e.g.
-        {
-            "inputs": {
-                "data": "csv data to encode",
-                "mappings": "csv2bufr mapping json file"
-            }
-        }
-
         :return: media_type, json
         """
 
         mimetype = "application/json"
         errors = []
+        bufr = []
         try:
             fm12 = data['data']
             metadata = data['metadata']
@@ -135,7 +128,7 @@ class processor(BaseProcessor):
                                        month = month)
             # transform returns a generator, we need to iterate over
             # and add to single output object
-            bufr = []
+
             for result in bufr_generator:
                 result['bufr4'] = base64.b64encode( result['bufr4'] ).decode("utf-8")  # noqa
                 bufr.append(result)
@@ -143,8 +136,9 @@ class processor(BaseProcessor):
         except Exception as e:
             LOGGER.error(e)
             errors.append(f"{e}")
-            output = {"messages": None, "errors": errors}
+            output = {"messages": bufr, "errors": errors}
 
+        LOGGER.error("returning")
         return mimetype, output
 
     def __repr__(self):

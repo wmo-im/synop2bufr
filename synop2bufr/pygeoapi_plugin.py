@@ -140,7 +140,7 @@ class processor(BaseProcessor):
             LOGGER.error(e)
             errors.append(f"{e}")
 
-        output = {"result": json.dumps(result), "errors": json.dumps(errors)}
+        output = {"result": json.dumps(bufr), "errors": json.dumps(errors)}
 
 
         LOGGER.error("returning")

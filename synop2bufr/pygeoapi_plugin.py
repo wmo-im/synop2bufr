@@ -18,6 +18,7 @@
 # under the License.
 #
 ###############################################################################
+import base64
 import logging
 from pygeoapi.process.base import BaseProcessor
 

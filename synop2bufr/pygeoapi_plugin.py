@@ -50,7 +50,7 @@ PROCESS_METADATA = {
             "metadata": None,
             "keywords": [],
         },
-        "metadata":{
+        "metadata": {
             "title": "Station metadata",
             "description": "CSV formatted data containing list of stations required by synop2bufr.",  # noqa
             "schema": {"type": "string"},
@@ -68,7 +68,7 @@ PROCESS_METADATA = {
             "metadata": None,
             "keywords": []
         },
-        "month":{
+        "month": {
             "title": "Month",
             "description": "Month (UTC) corresponding to FM 12-SYNOP bulletin",
             "schema": {"type": "integer"},
@@ -91,7 +91,7 @@ PROCESS_METADATA = {
     "example": {
         "inputs": {
             "data": r"AAXX 21121 15015 02999 02501 10103 21090 39765 42952 57020 60001 333 4/000 55310 0//// 22591 3//// 60007 91003 91104=",  # noqa
-            "metadata": r"station_name,wigos_station_identifier,traditional_station_identifier,facility_type,latitude,longitude,elevation,territory_name,wmo_region\\nOCNA SUGATAG,0-20000-0-15015,15015,Land (fixed),47.77706163,23.94046026,503,Romania,6",  #noqa
+            "metadata": r"station_name,wigos_station_identifier,traditional_station_identifier,facility_type,latitude,longitude,elevation,territory_name,wmo_region\\nOCNA SUGATAG,0-20000-0-15015,15015,Land (fixed),47.77706163,23.94046026,503,Romania,6",  # noqa
             "year": 2022,
             "month": 2
         },

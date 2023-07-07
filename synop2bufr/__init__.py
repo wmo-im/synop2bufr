@@ -46,7 +46,7 @@ _keys = ['report_type', 'year', 'month', 'day',
          'block_no', 'station_no', 'station_id', 'region',
          'WMO_station_type',
          'lowest_cloud_base', 'visibility', 'cloud_cover',
-         'time_significance', 'wind_time_period',
+         'wind_indicator', 'wind_time_period',
          'wind_direction', 'wind_speed', 'air_temperature',
          'dewpoint_temperature', 'relative_humidity', 'station_pressure',
          'isobaric_surface', 'geopotential_height', 'sea_level_pressure',
@@ -77,17 +77,20 @@ _keys = ['report_type', 'year', 'month', 'day',
          'net_short_wave_radiation_1hr', 'net_short_wave_radiation_24hr',
          'direct_solar_radiation_1hr', 'direct_solar_radiation_24hr',
          'precipitation_s3', 'ps3_time_period', 'precipitation_24h',
-         'highest_gust_1', 'highest_gust_2', 'hg2_time_period']
+         'highest_gust_1', 'highest_gust_2']
 
 # Build the dictionary template
 synop_template = dict.fromkeys(_keys)
 
 THISDIR = os.path.dirname(os.path.realpath(__file__))
-MAPPINGS = f"{THISDIR}{os.sep}resources{os.sep}synop-mappings.json"
+MAPPINGS_307080 = f"{THISDIR}{os.sep}resources{os.sep}synop-mappings-307080.json"
+MAPPINGS_307096 = f"{THISDIR}{os.sep}resources{os.sep}synop-mappings-307096.json"
 
-# Load template mappings file, this will be updated for each message.
-with open(MAPPINGS) as fh:
-    _mapping = json.load(fh)
+# Load template mappings files, this will be updated for each message.
+with open(MAPPINGS_307080) as fh:
+    _mapping_307080 = json.load(fh)
+with open(MAPPINGS_307096) as fh:
+    _mapping_307096 = json.load(fh)
 
 
 def parse_synop(message: str, year: int, month: int) -> dict:
@@ -144,7 +147,13 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     else:
         output['minute'] = 0
 
-    # ! Removed wind instrument indicator as it is not used in 307096
+    # Translate wind instrument flag from the SYNOP code to the BUFR code
+    if 'wind_indicator' in decoded:
+        try:
+            iw = decoded['wind_indicator']['value']
+            output['wind_indicator'] = iw
+        except Exception:
+            output['wind_indicator'] = None
 
     if 'station_id' in decoded:
         try:
@@ -221,7 +230,6 @@ def parse_synop(message: str, year: int, month: int) -> dict:
         # See B/C1.10.5.3
         # NOTE: Every time period in the following code shall be a negative number,  # noqa
         # to indicate measurements have been taken up until the present.
-        output['time_significance'] = 2
         output['wind_time_period'] = -10
 
         try:
@@ -1030,18 +1038,6 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             output['highest_gust_2'] = decoded['highest_gust']['gust_2']['speed']['value']  # noqa
         except Exception:
             output['highest_gust_2'] = None
-    #  Regulation 6/12.12.2 in the WMO regional guide tells us that the
-    #  1st max gust speed has fixed time period 10 minutes, and the 2nd has
-    #  time period equal to the length of the observation time in minutes.
-    # NOTE: All time periods must be negative
-    if hr % 6 == 0:
-        output['hg2_time_period'] = -6*60
-    elif hr % 3 == 0:
-        output['hg2_time_period'] = -3*60
-    elif hr % 2 == 0:
-        output['hg2_time_period'] = -2*60
-    else:
-        output['hg2_time_period'] = -60
 
     # ! SECTION 4
 
@@ -1230,11 +1226,6 @@ def transform(data: str, metadata: str, year: int,
         # create dictionary to store / return result in
         result = dict()
 
-        # get mapping template, this needs to be reloaded everytime as each
-        # SYNOP can have a different number of
-        # replications
-        mapping = deepcopy(_mapping)
-
         # parse data to dictionary and get number of section 3 and 4
         # clouds
         try:
@@ -1245,6 +1236,24 @@ def transform(data: str, metadata: str, year: int,
         except Exception as e:
             LOGGER.error(f"Error parsing SYNOP report: {message}. {str(e)}")
             continue
+
+        # Now determine and load the appropriate mappings
+        # file depending on the value of the wind indicator.
+        # This will be updated for each message.
+        if msg['wind_indicator'] in [1, 4]:
+            # Use the new template if wind is measured
+            bufr_template = 307096
+            # Get mapping template, this needs to be
+            # reloaded everytime as each SYNOP can have a
+            # different number of replications
+            mapping = deepcopy(_mapping_307096)
+        else:
+            # Use the old template otherwise
+            bufr_template = 308070
+            # Get mapping template, this needs to be
+            # reloaded everytime as each SYNOP can have a
+            # different number of replications
+            mapping = deepcopy(_mapping_307080)
 
         # set WSI
         try:
@@ -1343,7 +1352,7 @@ def transform(data: str, metadata: str, year: int,
         # At this point we have a dictionary for the data, a
         # dictionary of the mappings and the metadata
         # The last step is to convert to BUFR.
-        unexpanded_descriptors = [301150, 307096]
+        unexpanded_descriptors = [301150, bufr_template]
         short_delayed_replications = []
         # update replications
         delayed_replications = [max(1, num_s3_clouds), max(1, num_s4_clouds)]
@@ -1429,6 +1438,7 @@ def transform(data: str, metadata: str, year: int,
                     "data_category": message.get_element("dataCategory")
                 },
                 "result": status,
+                "template": bufr_template,
                 "csv": csv_string
             }
 

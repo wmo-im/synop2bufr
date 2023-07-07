@@ -27,7 +27,16 @@ LOGGER = logging.getLogger(__name__)
 
 
 @pytest.fixture
-def multiple_reports():
+def multiple_reports_307080():
+    return """AAXX 21120
+15015 02999 02501 10103 21090 39765 42952 57020 60001=
+15020 02997 23104 10130 21075 30177 40377 58020 60001 81041=
+15090 02997 53102 10139 21075 30271 40364 58031 60001 82046=
+    """
+
+
+@pytest.fixture
+def multiple_reports_307096():
     return """AAXX 21121
 15015 02999 02501 10103 21090 39765 42952 57020 60001=
 15020 02997 23104 10130 21075 30177 40377 58020 60001 81041=
@@ -54,14 +63,14 @@ def metadata_string():
     return md
 
 
-def test_report_separation(multiple_reports):
+def test_report_separation(multiple_reports_307080):
     # Extract each report
-    msg_list = extract_individual_synop(multiple_reports)
+    msg_list = extract_individual_synop(multiple_reports_307080)
     assert len(msg_list) == 3
     # Assert each report has been extracted as intended
-    assert msg_list[0] == "AAXX 21121 15015 02999 02501 10103 21090 39765 42952 57020 60001"  # noqa
-    assert msg_list[1] == "AAXX 21121 15020 02997 23104 10130 21075 30177 40377 58020 60001 81041"  # noqa
-    assert msg_list[2] == "AAXX 21121 15090 02997 53102 10139 21075 30271 40364 58031 60001 82046"  # noqa
+    assert msg_list[0] == "AAXX 21120 15015 02999 02501 10103 21090 39765 42952 57020 60001"  # noqa
+    assert msg_list[1] == "AAXX 21120 15020 02997 23104 10130 21075 30177 40377 58020 60001 81041"  # noqa
+    assert msg_list[2] == "AAXX 21120 15090 02997 53102 10139 21075 30271 40364 58031 60001 82046"  # noqa
 
 
 def test_conversion(single_report):
@@ -132,14 +141,40 @@ def test_conversion(single_report):
     assert num_s4_clouds == 2
 
 
-def test_bufr(multiple_reports, metadata_string):
-    result = transform(multiple_reports, metadata_string, 2022, 3)
+def test_bufr(multiple_reports_307080, metadata_string):
+    result = transform(multiple_reports_307080,
+                       metadata_string, 2022, 3)
     msgs = {}
     for item in result:
         msgs[item['_meta']['id']] = item
-    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == '03e1cfdb94c9779b5c075419a637b48e'  # noqa
-    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == 'b3bbd4679109220d9b8e642aff73ec69'  # noqa
-    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == '58d00cb3d2b211772f1e83b2d2e61ab1'  # noqa
+    # Test the md5 keys
+    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == '27c990045879acc2eedddb7fdc70db4d'  # noqa
+    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == '9db622c40d53aae4ce4f38a658f36d86'  # noqa
+    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == '89f424b9fc38a6db69c7b195bd71d92f'  # noqa
+
+    # Test the bufr template used for all the reports
+    # (they should be the same for every report)
+    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['template'] == 307080  # noqa
+    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['template'] == 307080  # noqa
+    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['template'] == 307080  # noqa
+
+
+def test_bufr(multiple_reports_307096, metadata_string):
+    result = transform(multiple_reports_307096,
+                       metadata_string, 2022, 3)
+    msgs = {}
+    for item in result:
+        msgs[item['_meta']['id']] = item
+    # Test the md5 keys
+    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == '27c990045879acc2eedddb7fdc70db4d'  # noqa
+    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == '9db622c40d53aae4ce4f38a658f36d86'  # noqa
+    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == '89f424b9fc38a6db69c7b195bd71d92f'  # noqa
+
+    # Test the bufr template used for all the reports
+    # (they should be the same for every report)
+    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['template'] == 307096  # noqa
+    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['template'] == 307096  # noqa
+    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['template'] == 307096  # noqa
 
 
 def test_invalid_separation():

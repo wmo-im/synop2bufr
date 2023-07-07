@@ -86,7 +86,7 @@
         {"eccodes_key": "#1#windSpeed", "value": "data:wind_speed"},
         {"eccodes_key": "#7#timePeriod", "value": "const:-10"},
         {"eccodes_key": "#1#maximumWindGustSpeed", "value": "data:highest_gust_1"},
-        {"eccodes_key": "#8#timePeriod", "value": "const:-60"},
+        {"eccodes_key": "#8#timePeriod", "value": "data:past_weather_time_period"},
         {"eccodes_key": "#2#maximumWindGustSpeed", "value": "data:highest_gust_2"},
         {"eccodes_key": "#13#timePeriod", "value": "data:maximum_temperature_period_start"},
         {"eccodes_key": "#14#timePeriod", "value": "data:maximum_temperature_period_end"},

@@ -86,7 +86,7 @@ PROCESS_METADATA = {
     "example": {
         "inputs": {
             "data":r"AAXX 21121 15015 02999 02501 10103 21090 39765 42952 57020 60001 333 4/000 55310 0//// 22591 3//// 60007 91003 91104=",  # noqa
-            "metadata": r"station_name,wigos_station_identifier,traditional_station_identifier,facility_type,latitude,longitude,elevation,territory_name,wmo_region\nOCNA SUGATAG,0-20000-0-15015,15015,Land (fixed),47.77706163,23.94046026,503,Romania,6",
+            "metadata": r"station_name,wigos_station_identifier,traditional_station_identifier,facility_type,latitude,longitude,elevation,territory_name,wmo_region\\nOCNA SUGATAG,0-20000-0-15015,15015,Land (fixed),47.77706163,23.94046026,503,Romania,6",
             "year": 2022,
             "month": 2
         },
@@ -122,6 +122,7 @@ class processor(BaseProcessor):
         """
 
         mimetype = "application/json"
+        errors = []
         try:
             fm12 = data['data']
             metadata = data['metadata']
@@ -134,19 +135,13 @@ class processor(BaseProcessor):
             # transform returns a generator, we need to iterate over
             # and add to single output object
             bufr = []
-            count = 0
             for result in bufr_generator:
                 bufr.append(result)
-                count += 1
-            if count != 1:
-                LOGGER.error(fm12)
-                LOGGER.error(metadata)
-            output = {"messages": bufr}
-            LOGGER.error(f"Number of messages processed = {count}")
-            LOGGER.error(output)
+            output = {"messages": bufr, "errors": errors}
         except Exception as e:
-            LOGGER.exception(e)
-            output = {"messages": None, "errors": e}
+            LOGGER.error(e)
+            errors.append(f"{e}")
+            output = {"messages": None, "errors": errors}
 
         return mimetype, output
 

@@ -144,22 +144,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     else:
         output['minute'] = 0
 
-    # Translate wind instrument flag from the SYNOP code to the BUFR code
-    if 'wind_indicator' in decoded:
-        try:
-            iw = decoded['wind_indicator']['value']
-        except Exception:
-            iw = None
-
-        # If iw = 1 or 4, the wind was obtained from an
-        # anemometer and thus the corresponding wind data
-        # should be encoded
-        if iw == 1 or iw == 4:
-            ENCODE_WIND = True
-        else:
-            ENCODE_WIND = False
-    else:
-        ENCODE_WIND = False
+    # ! Removed wind instrument indicator as it is not used in 307096
 
     if 'station_id' in decoded:
         try:
@@ -232,7 +217,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             output['cloud_cover'] = None
 
     # Wind direction is already in degrees
-    if ('surface_wind' in decoded) and ENCODE_WIND:
+    if ('surface_wind' in decoded):
         # See B/C1.10.5.3
         # NOTE: Every time period in the following code shall be a negative number,  # noqa
         # to indicate measurements have been taken up until the present.
@@ -1036,7 +1021,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     #  wind gust speed for region VI (groups 910fmfm and 911fxfx).
     #  These are given and required to be in m/s.
 
-    if ('highest_gust' in decoded) and ENCODE_WIND:
+    if ('highest_gust' in decoded):
         try:
             output['highest_gust_1'] = decoded['highest_gust']['gust_1']['speed']['value']  # noqa
         except Exception:
@@ -1406,18 +1391,19 @@ def transform(data: str, metadata: str, year: int,
             # now identifier based on WSI and observation date as identifier
             isodate = message.get_datetime().strftime('%Y%m%dT%H%M%S')
 
-            # Write message to CSV file
+            # Write message to CSV object in memory
             try:
-                with open(f"decoded_{isodate}.csv",
-                          "a", newline="") as output_csv:
-                    dict_writer = csv.DictWriter(output_csv, msg.keys())
+                csv_object = StringIO()
+                dict_writer = csv.DictWriter(csv_object, msg.keys())
 
-                    # Check if CSV file is empty before adding headers
-                    if os.stat(f"decoded_{isodate}.csv").st_size == 0:
-                        dict_writer.writeheader()
+                # Add headers
+                dict_writer.writeheader()
 
-                    # Write data to rows
-                    dict_writer.writerow(msg)
+                # Write data to rows
+                dict_writer.writerow(msg)
+
+                # Get string from CSV object
+                csv_string = csv_object.getvalue()
             except Exception:
                 LOGGER.warning(
                     f"Unable to write report of station {tsi} to CSV")
@@ -1442,7 +1428,8 @@ def transform(data: str, metadata: str, year: int,
                     message.get_element("bufrHeaderCentre"),
                     "data_category": message.get_element("dataCategory")
                 },
-                "result": status
+                "result": status,
+                "csv": csv_string
             }
 
             # time_ = datetime.now(timezone.utc).isoformat()

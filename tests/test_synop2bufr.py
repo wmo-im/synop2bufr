@@ -48,9 +48,9 @@ def single_report():
 @pytest.fixture
 def metadata_string():
     md = "station_name,wigos_station_identifier,traditional_station_identifier,facility_type,latitude,longitude,elevation,barometer_height,territory_name,wmo_region\n" + \
-            "OCNA SUGATAG,0-20000-0-15015,15015,Land (fixed),47.77706163,23.94046026,503,503,Romania,6\n" + \
-            "BOTOSANI,0-20000-0-15020,15020,Land (fixed),47.73565324,26.64555017,161,161,Romania,6\n" + \
-            "IASI,0-20000-0-15090,15090,Land (fixed),47.16333333,27.62722222,74.29,74.29,Romania,6"  # noqa
+            "OCNA SUGATAG,0-20000-0-15015,15015,Land (fixed),47.77706163,23.94046026,503,504.43,Romania,6\n" + \
+            "BOTOSANI,0-20000-0-15020,15020,Land (fixed),47.73565324,26.64555017,161,162.2,Romania,6\n" + \
+            "IASI,0-20000-0-15090,15090,Land (fixed),47.16333333,27.62722222,74.29,75.69,Romania,6"  # noqa
     return md
 
 
@@ -137,9 +137,9 @@ def test_bufr(multiple_reports, metadata_string):
     msgs = {}
     for item in result:
         msgs[item['_meta']['id']] = item
-    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == 'e216f684eac7eee6b33bee3acad197d4'  # noqa
-    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == 'e14419555ba882fc315f356f8ad9e3f8'  # noqa
-    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == '53be05ccd3be798ebe41168e0ca0450c'  # noqa
+    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == '03e1cfdb94c9779b5c075419a637b48e'  # noqa
+    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == 'b3bbd4679109220d9b8e642aff73ec69'  # noqa
+    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == '58d00cb3d2b211772f1e83b2d2e61ab1'  # noqa
 
 
 def test_invalid_separation():

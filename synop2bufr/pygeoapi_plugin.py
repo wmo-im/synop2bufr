@@ -42,6 +42,7 @@ PROCESS_METADATA = {
         "data": {
             "title": "FM 12-SYNOP bulletin string",
             "description": "Input FM 12-SYNOP bulletin to convert to BUFR.",
+            "schema": {"type": "string"},
             "minOccurs": 1,
             "maxOccurs": 1,
             "metadata": None,

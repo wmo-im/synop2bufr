@@ -134,11 +134,15 @@ class processor(BaseProcessor):
             # transform returns a generator, we need to iterate over
             # and add to single output object
             bufr = []
+            count = 0
             for result in bufr_generator:
                 bufr.append(result)
-
+                count += 1
+            if count != 1:
+                LOGGER.error(fm12)
+                LOGGER.error(metadata)
             output = {"messages": bufr}
-
+            LOGGER.error(f"Number of messages processed = {count}")
             LOGGER.error(output)
         except Exception as e:
             LOGGER.exception(e)

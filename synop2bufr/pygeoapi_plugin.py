@@ -126,16 +126,16 @@ class processor(BaseProcessor):
             metadata = data['metadata']
             year = data['year']
             month = data['month']
-            bufr_generator = transform(data = fm12,
-                                       metadata = metadata,
-                                       year =  year,
-                                       month = month)
+            bufr_generator = transform(data=fm12,
+                                       metadata=metadata,
+                                       year=year,
+                                       month=month)
+
             # transform returns a generator, we need to iterate over
             # and add to single output object
-
             for result in bufr_generator:
                 # need to convert BUFR binary to base64
-                result['bufr4'] = base64.b64encode( result['bufr4'] ).decode("utf-8")  # noqa
+                result['bufr4'] = base64.b64encode(result['bufr4']).decode("utf-8")  # noqa
                 # convert datetime to string
                 result['_meta']['properties']['datetime'] = \
                     result['_meta']['properties']['datetime'].isoformat()

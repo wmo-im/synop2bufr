@@ -136,6 +136,7 @@ class processor(BaseProcessor):
             # and add to single output object
             bufr = []
             for result in bufr_generator:
+                result['bufr4'] = base64.b64encode( result['bufr4'] ).decode("utf-8")  # noqa
                 bufr.append(result)
             output = {"messages": bufr, "errors": errors}
         except Exception as e:

@@ -101,59 +101,49 @@ def transform(ctx, synop_file, metadata, output_dir, year, month, verbosity):
         # Get content from synop file
         content = synop_file.read()
 
-        # Split multiple messages by GTS end of message signal NNNN
-        messages = content.upper().split("NNNN")
-
-        # Remove leading or trailing whitespaces from these messages
-        # and ignore empty messages after the final NNNN
-        messages = [msg.strip() for msg in messages if msg != ""]
-
         # Read metadata file contents as a string
-        metadata_string = metadata.read()
+        # metadata_string = metadata.read()
 
-        # Transform each message to BUFR files
-        for synop_msg in messages:
+        # Boolean to know if the decoded CSV has a header
+        # or not yet
+        header_written = False
 
-            # Boolean to know if the decoded CSV has a header
-            # or not yet
-            header_written = False
-
-            try:
-                result = transform_synop(synop_msg,
-                                         metadata_string,
-                                         year, month)
-
-            except Exception as e:
-                raise click.ClickException(e)
-
-            for item in result:
-                # Write the CSV file of decoded data
-                csv_string = item["_meta"]["csv"]
-                timestamp = item["_meta"]["properties"]["datetime"].strftime(
-                    '%Y%m%dT%H%M%S'
+        try:
+            result = transform_synop(
+                content, metadata.read(), year, month
                 )
 
-                filename = f"decoded_{timestamp}.csv"
+        except Exception as e:
+            raise click.ClickException(e)
 
-                if header_written:
-                    mode = "a"  # Append to file if headers
+        for item in result:
+            # Write the CSV file of decoded data
+            csv_string = item["_meta"]["csv"]
+            timestamp = item["_meta"]["properties"]["datetime"].strftime(
+                '%Y%m%dT%H%M%S'
+            )
+
+            filename = f"decoded_{timestamp}.csv"
+
+            if header_written:
+                mode = "a"  # Append to file if headers
+            else:
+                mode = "w"  # Write to file if no headers
+
+            with open(filename, mode) as f:
+                if not header_written:
+                    # Write the whole string including headers
+                    f.write(csv_string)
+                    header_written = True
                 else:
-                    mode = "w"  # Write to file if no headers
+                    # Skip the header row of the string
+                    f.write(csv_string.split("\n")[1])
 
-                with open(filename, mode) as f:
-                    if not header_written:
-                        # Write the whole string including headers
-                        f.write(csv_string)
-                        header_written = True
-                    else:
-                        # Skip the header row of the string
-                        f.write(csv_string.split("\n")[1])
-
-                # Write the BUFR file
-                key = item['_meta']["id"]
-                bufr_filename = f"{output_dir}{os.sep}{key}.bufr4"
-                with open(bufr_filename, "wb") as fh:
-                    fh.write(item["bufr4"])
+            # Write the BUFR file
+            key = item['_meta']["id"]
+            bufr_filename = f"{output_dir}{os.sep}{key}.bufr4"
+            with open(bufr_filename, "wb") as fh:
+                fh.write(item["bufr4"])
 
     except Exception as e:
         raise click.ClickException(e)

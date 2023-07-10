@@ -46,9 +46,10 @@ _keys = ['report_type', 'year', 'month', 'day',
          'block_no', 'station_no', 'station_id', 'region',
          'WMO_station_type',
          'lowest_cloud_base', 'visibility', 'cloud_cover',
-         'wind_indicator', 'wind_time_period',
-         'wind_direction', 'wind_speed', 'air_temperature',
-         'dewpoint_temperature', 'relative_humidity', 'station_pressure',
+         'wind_indicator', 'template',
+         'wind_time_period', 'wind_direction', 'wind_speed',
+         'air_temperature', 'dewpoint_temperature',
+         'relative_humidity', 'station_pressure',
          'isobaric_surface', 'geopotential_height', 'sea_level_pressure',
          '3hr_pressure_change', 'pressure_tendency_characteristic',
          'precipitation_s1', 'ps1_time_period', 'present_weather',
@@ -151,9 +152,32 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     if 'wind_indicator' in decoded:
         try:
             iw = decoded['wind_indicator']['value']
-            output['wind_indicator'] = iw
+
+            # Note bit 3 should never be set for synop, units
+            # of km/h not reportable
+            if iw == 0:
+                iw_translated = 0b0000  # Wind in m/s, default, no bits set
+                output['template'] = 307080
+            elif iw == 1:
+                iw_translated = 0b1000  # Wind in m/s with anemometer bit 1 (left most) set  # noqa
+                output['template'] = 307096
+            elif iw == 3:
+                iw_translated = 0b0100  # Wind in knots, bit 2 set
+                output['template'] = 307080
+            elif iw == 4:
+                iw_translated = 0b1100  # Wind in knots with anemometer, bits
+                # 1 and 2 set # noq
+                output['template'] = 307096
+            else:
+                iw_translated = None  # 0b1111  # Missing value
+                output['template'] = 307080
+
+            output['wind_indicator'] = iw_translated
         except Exception:
             output['wind_indicator'] = None
+            output['template'] = 307080
+    else:
+        output['template'] = 307080
 
     if 'station_id' in decoded:
         try:
@@ -1208,255 +1232,271 @@ def transform(data: str, metadata: str, year: int,
         LOGGER.error("Invalid metadata")
         raise ValueError
 
-    # Now extract individual synop reports from string
-    try:
-        messages = extract_individual_synop(data)
-    except Exception as e:
-        LOGGER.error(e)
-        return None
+    # ===========================================
+    # Split the data by the end of message signal
+    # ===========================================
+    gts_messages = data.upper().split("NNNN")
 
-    # Count how many conversions were successful using a dictionary
-    conversion_success = {}
+    # Remove leading or trailing whitespaces from these
+    # messages and ignore empty messages after the final NNNN
+    gts_messages = [msg.strip()
+                    for msg in gts_messages if msg != ""]
 
-    # Now we need to iterate over the reports, parsing and converting to BUFR
-    for message in messages:
-        # check we have date
-        if message is None:
-            continue
-        # create dictionary to store / return result in
-        result = dict()
+    # =====================================
+    # Repeat transform for each GTS message
+    # =====================================
+    for gts_msg in gts_messages:
 
-        # parse data to dictionary and get number of section 3 and 4
-        # clouds
+        # Now extract individual synop reports from string
         try:
-            msg, num_s3_clouds, num_s4_clouds = \
-                parse_synop(message, year, month)
-            # get TSI
-            tsi = msg['station_id']
-        except Exception as e:
-            LOGGER.error(f"Error parsing SYNOP report: {message}. {str(e)}")
-            continue
-
-        # Now determine and load the appropriate mappings
-        # file depending on the value of the wind indicator.
-        # This will be updated for each message.
-        if msg['wind_indicator'] in [1, 4]:
-            # Use the new template if wind is measured
-            bufr_template = 307096
-            # Get mapping template, this needs to be
-            # reloaded everytime as each SYNOP can have a
-            # different number of replications
-            mapping = deepcopy(_mapping_307096)
-        else:
-            # Use the old template otherwise
-            bufr_template = 307080
-            # Get mapping template, this needs to be
-            # reloaded everytime as each SYNOP can have a
-            # different number of replications
-            mapping = deepcopy(_mapping_307080)
-
-        # set WSI
-        try:
-            wsi = tsi_mapping[tsi]
-        except Exception:
-            conversion_success[tsi] = False
-            LOGGER.warning(f"Station {tsi} not found in station file")
-
-        # parse WSI to get sections
-        try:
-            wsi_series, wsi_issuer, wsi_issue_number, wsi_local = wsi.split("-")   # noqa
-
-            # get other required metadata
-            latitude = metadata_dict[wsi]["latitude"]
-            longitude = metadata_dict[wsi]["longitude"]
-            station_height = metadata_dict[wsi]["elevation"]
-            barometer_height = metadata_dict[wsi]["barometer_height"]
-
-            # add these values to the data dictionary
-            msg['_wsi_series'] = wsi_series
-            msg['_wsi_issuer'] = wsi_issuer
-            msg['_wsi_issue_number'] = wsi_issue_number
-            msg['_wsi_local'] = wsi_local
-            msg['_latitude'] = latitude
-            msg['_longitude'] = longitude
-            msg['_station_height'] = station_height
-            msg['_barometer_height'] = barometer_height
-            conversion_success[tsi] = True
-        except Exception:
-            conversion_success[tsi] = False
-
-            if wsi == "":
-                LOGGER.warning(f"Missing WSI for station {tsi}")
-            else:
-                LOGGER.warning((f"Invalid metadata for station {tsi} found"
-                                " station file, unable to parse"))
-
-        for idx in range(num_s3_clouds):
-            # Build the dictionary of mappings for section 3 group 8NsChshs
-
-            # NOTE: The following keys have been used before so the replicator
-            # has to be increased:
-            # - cloudAmount: used 2 times (Nh, Ns)
-            # - cloudType: used 4 times (CL, CM, CH, C)
-            # - heightOfBaseOfCloud: used 1 time (h)
-            # - verticalSignificance: used 7 times (for N, low-high cloud
-            # amount, low-high cloud drift)
-            s3_mappings = [
-                {"eccodes_key": (
-                    f"#{idx+8}"
-                    "#verticalSignificanceSurfaceObservations"
-                ),
-                    "value": f"data:vs_s3_{idx+1}"},
-                {"eccodes_key": f"#{idx+3}#cloudAmount",
-                 "value": f"data:cloud_amount_s3_{idx+1}"},
-                {"eccodes_key": f"#{idx+5}#cloudType",
-                 "value": f"data:cloud_genus_s3_{idx+1}"},
-                {"eccodes_key": f"#{idx+2}#heightOfBaseOfCloud",
-                 "value": f"data:cloud_height_s3_{idx+1}"}
-            ]
-            mapping.update(s3_mappings[i] for i in range(4))
-
-        for idx in range(num_s4_clouds):
-            # Based upon the station height metadata, the value of vertical
-            # significance for section 4 groups can be determined.
-            # Specifically, by B/C1.5.2.1, clouds with bases below but tops
-            # above station level have vertical significance code 10.
-            # Clouds with bases and tops below station level have vertical
-            # significance code 11.
-            cloud_top_height = msg[f'cloud_height_s4_{idx+1}']
-
-            if cloud_top_height > int(station_height):
-                vs_s4 = 10
-            else:
-                vs_s4 = 11
-
-            # NOTE: Some of the ecCodes keys are used in the above, so we must
-            # add 'num_s3_clouds'
-            s4_mappings = [
-                {"eccodes_key": (
-                    f"#{idx+num_s3_clouds+8}"
-                    "#verticalSignificanceSurfaceObservations"
-                ),
-                    "value": f"const:{vs_s4}"},
-                {"eccodes_key": f"#{idx+num_s3_clouds+3}#cloudAmount",
-                 "value": f"data:cloud_amount_s4_{idx+1}"},
-                {"eccodes_key": f"#{idx+num_s3_clouds+5}#cloudType",
-                 "value": f"data:cloud_genus_s4_{idx+1}"},
-                {"eccodes_key": f"#{idx+1}#heightOfTopOfCloud",
-                 "value": f"data:cloud_height_s4_{idx+1}"},
-                {"eccodes_key": f"#{idx+1}#cloudTopDescription",
-                 "value": f"data:cloud_top_s4_{idx+1}"}
-            ]
-            mapping.update(s4_mappings[i] for i in range(4))
-
-        # At this point we have a dictionary for the data, a
-        # dictionary of the mappings and the metadata
-        # The last step is to convert to BUFR.
-        unexpanded_descriptors = [301150, bufr_template]
-        short_delayed_replications = []
-        # update replications
-        delayed_replications = [max(1, num_s3_clouds), max(1, num_s4_clouds)]
-        extended_delayed_replications = []
-        table_version = 37
-        try:
-            # create new BUFR msg
-            message = BUFRMessage(
-                unexpanded_descriptors,
-                short_delayed_replications,
-                delayed_replications,
-                extended_delayed_replications,
-                table_version)
+            messages = extract_individual_synop(gts_msg)
         except Exception as e:
             LOGGER.error(e)
-            LOGGER.error("Error creating BUFRMessage")
-            conversion_success[tsi] = False
+            return None
 
-        # parse
-        if conversion_success[tsi]:
+        # Count how many conversions were successful using a dictionary
+        conversion_success = {}
+
+        # Now we need to iterate over the reports, parsing
+        # and converting to BUFR
+        for message in messages:
+            # check we have date
+            if message is None:
+                continue
+            # create dictionary to store / return result in
+            result = dict()
+
+            # parse data to dictionary and get number of section 3 and 4
+            # clouds
             try:
-                # Parse to BUFRMessage object
-                message.parse(msg, mapping)
+                msg, num_s3_clouds, num_s4_clouds = \
+                    parse_synop(message, year, month)
+                # get TSI
+                tsi = msg['station_id']
             except Exception as e:
-                LOGGER.error(e)
-                LOGGER.error("Error parsing message")
-                conversion_success[tsi] = False
+                LOGGER.error(
+                    f"Error parsing SYNOP report: {message}. {str(e)}")
+                continue
 
-        # Only convert to BUFR if there's no errors so far
-        if conversion_success[tsi]:
+            # Now determine and load the appropriate mappings
+            # file depending on the value of the wind indicator.
+            # This will be updated for each message.
+            bufr_template = msg['template']
+            if bufr_template == 307096:
+                # Get mapping template, this needs to be
+                # reloaded everytime as each SYNOP can have a
+                # different number of replications
+                mapping = deepcopy(_mapping_307096)
+            else:
+                # Get mapping template, this needs to be
+                # reloaded everytime as each SYNOP can have a
+                # different number of replications
+                mapping = deepcopy(_mapping_307080)
+
+            # set WSI
             try:
-                result["bufr4"] = message.as_bufr()  # encode to BUFR
-                status = {"code": PASSED}
-
-            except Exception as e:
-                LOGGER.error("Error encoding BUFR, null returned")
-                LOGGER.error(e)
-                result["bufr4"] = None
-                status = {
-                    "code": FAILED,
-                    "message": f"Error encoding, BUFR set to None:\n\t\tError: {e}\n\t\tMessage: {msg}"  # noqa
-                }
-                conversion_success[tsi] = False
-
-            # now identifier based on WSI and observation date as identifier
-            isodate = message.get_datetime().strftime('%Y%m%dT%H%M%S')
-
-            # Write message to CSV object in memory
-            try:
-                csv_object = StringIO()
-                dict_writer = csv.DictWriter(csv_object, msg.keys())
-
-                # Add headers
-                dict_writer.writeheader()
-
-                # Write data to rows
-                dict_writer.writerow(msg)
-
-                # Get string from CSV object
-                csv_string = csv_object.getvalue()
+                wsi = tsi_mapping[tsi]
             except Exception:
-                LOGGER.warning(
-                    f"Unable to write report of station {tsi} to CSV")
+                conversion_success[tsi] = False
+                LOGGER.warning(f"Station {tsi} not found in station file")
 
-            rmk = f"WIGOS_{wsi}_{isodate}"
+            # parse WSI to get sections
+            try:
+                wsi_series, wsi_issuer, wsi_issue_number, wsi_local = wsi.split("-")   # noqa
 
-            # now additional metadata elements
-            result["_meta"] = {
-                "id": rmk,
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": [
-                        message.get_element('#1#longitude'),
-                        message.get_element('#1#latitude')
-                    ]
-                },
-                "properties": {
-                    "md5": message.md5(),
-                    "wigos_station_identifier": wsi,
-                    "datetime": message.get_datetime(),
-                    "originating_centre":
-                    message.get_element("bufrHeaderCentre"),
-                    "data_category": message.get_element("dataCategory")
-                },
-                "result": status,
-                "template": bufr_template,
-                "csv": csv_string
-            }
+                # get other required metadata
+                latitude = metadata_dict[wsi]["latitude"]
+                longitude = metadata_dict[wsi]["longitude"]
+                station_height = metadata_dict[wsi]["elevation"]
+                barometer_height = metadata_dict[wsi]["barometer_height"]
 
-            # time_ = datetime.now(timezone.utc).isoformat()
-            # LOGGER.info(f"{time_}|{result['_meta']}")
+                # add these values to the data dictionary
+                msg['_wsi_series'] = wsi_series
+                msg['_wsi_issuer'] = wsi_issuer
+                msg['_wsi_issue_number'] = wsi_issue_number
+                msg['_wsi_local'] = wsi_local
+                msg['_latitude'] = latitude
+                msg['_longitude'] = longitude
+                msg['_station_height'] = station_height
+                msg['_barometer_height'] = barometer_height
+                conversion_success[tsi] = True
+            except Exception:
+                conversion_success[tsi] = False
 
-        # now yield result back to caller
-        yield result
+                if wsi == "":
+                    LOGGER.warning(f"Missing WSI for station {tsi}")
+                else:
+                    LOGGER.warning((f"Invalid metadata for station {tsi} found"
+                                    " station file, unable to parse"))
 
-        # Output conversion status to user
-        if conversion_success[tsi]:
-            LOGGER.info(f"Station {tsi} report converted")
-        else:
-            LOGGER.info(f"Station {tsi} report failed to convert")
+            for idx in range(num_s3_clouds):
+                # Build the dictionary of mappings for section 3 group 8NsChshs
 
-    # calculate number of successful conversions
-    conversion_count = sum(tsi for tsi in conversion_success.values())
+                # NOTE: The following keys have been used
+                # before so the replicator has to be increased:
+                # - cloudAmount: used 2 times (Nh, Ns)
+                # - cloudType: used 4 times (CL, CM, CH, C)
+                # - heightOfBaseOfCloud: used 1 time (h)
+                # - verticalSignificance: used 7 times (for N, low-high cloud
+                # amount, low-high cloud drift)
+                s3_mappings = [
+                    {"eccodes_key": (
+                        f"#{idx+8}"
+                        "#verticalSignificanceSurfaceObservations"
+                    ),
+                        "value": f"data:vs_s3_{idx+1}"},
+                    {"eccodes_key": f"#{idx+3}#cloudAmount",
+                     "value": f"data:cloud_amount_s3_{idx+1}"},
+                    {"eccodes_key": f"#{idx+5}#cloudType",
+                     "value": f"data:cloud_genus_s3_{idx+1}"},
+                    {"eccodes_key": f"#{idx+2}#heightOfBaseOfCloud",
+                     "value": f"data:cloud_height_s3_{idx+1}"}
+                ]
+                mapping.update(s3_mappings[i] for i in range(4))
 
-    # print number of messages converted
-    LOGGER.info((f"{conversion_count} / {len(messages)}"
-                 " reports converted successfully"))
+            for idx in range(num_s4_clouds):
+                # Based upon the station height metadata, the value of vertical
+                # significance for section 4 groups can be determined.
+                # Specifically, by B/C1.5.2.1, clouds with bases below but tops
+                # above station level have vertical significance code 10.
+                # Clouds with bases and tops below station level have vertical
+                # significance code 11.
+                cloud_top_height = msg[f'cloud_height_s4_{idx+1}']
+
+                if cloud_top_height > int(station_height):
+                    vs_s4 = 10
+                else:
+                    vs_s4 = 11
+
+                # NOTE: Some of the ecCodes keys are used in
+                # the above, so we must add 'num_s3_clouds'
+                s4_mappings = [
+                    {"eccodes_key": (
+                        f"#{idx+num_s3_clouds+8}"
+                        "#verticalSignificanceSurfaceObservations"
+                    ),
+                        "value": f"const:{vs_s4}"},
+                    {"eccodes_key": f"#{idx+num_s3_clouds+3}#cloudAmount",
+                     "value": f"data:cloud_amount_s4_{idx+1}"},
+                    {"eccodes_key": f"#{idx+num_s3_clouds+5}#cloudType",
+                     "value": f"data:cloud_genus_s4_{idx+1}"},
+                    {"eccodes_key": f"#{idx+1}#heightOfTopOfCloud",
+                     "value": f"data:cloud_height_s4_{idx+1}"},
+                    {"eccodes_key": f"#{idx+1}#cloudTopDescription",
+                     "value": f"data:cloud_top_s4_{idx+1}"}
+                ]
+                mapping.update(s4_mappings[i] for i in range(4))
+
+            # At this point we have a dictionary for the data, a
+            # dictionary of the mappings and the metadata
+            # The last step is to convert to BUFR.
+            unexpanded_descriptors = [301150, bufr_template]
+            short_delayed_replications = []
+            # update replications
+            delayed_replications = [max(1, num_s3_clouds),
+                                    max(1, num_s4_clouds)]
+            extended_delayed_replications = []
+            table_version = 37
+            try:
+                # create new BUFR msg
+                message = BUFRMessage(
+                    unexpanded_descriptors,
+                    short_delayed_replications,
+                    delayed_replications,
+                    extended_delayed_replications,
+                    table_version)
+            except Exception as e:
+                LOGGER.error(e)
+                LOGGER.error("Error creating BUFRMessage")
+                conversion_success[tsi] = False
+
+            # parse
+            if conversion_success[tsi]:
+                try:
+                    # Parse to BUFRMessage object
+                    message.parse(msg, mapping)
+                except Exception as e:
+                    LOGGER.error(e)
+                    LOGGER.error("Error parsing message")
+                    conversion_success[tsi] = False
+
+            # Only convert to BUFR if there's no errors so far
+            if conversion_success[tsi]:
+                try:
+                    result["bufr4"] = message.as_bufr()  # encode to BUFR
+                    status = {"code": PASSED}
+
+                except Exception as e:
+                    LOGGER.error("Error encoding BUFR, null returned")
+                    LOGGER.error(e)
+                    result["bufr4"] = None
+                    status = {
+                        "code": FAILED,
+                        "message": f"Error encoding, BUFR set to None:\n\t\tError: {e}\n\t\tMessage: {msg}"  # noqa
+                    }
+                    conversion_success[tsi] = False
+
+                # now identifier based on WSI and observation
+                # date as identifier
+                isodate = message.get_datetime().strftime('%Y%m%dT%H%M%S')
+
+                # Write message to CSV object in memory
+                try:
+                    csv_object = StringIO()
+                    dict_writer = csv.DictWriter(csv_object, msg.keys())
+
+                    # Add headers
+                    dict_writer.writeheader()
+
+                    # Write data to rows
+                    dict_writer.writerow(msg)
+
+                    # Get string from CSV object
+                    csv_string = csv_object.getvalue()
+                except Exception:
+                    LOGGER.warning(
+                        f"Unable to write report of station {tsi} to CSV")
+
+                rmk = f"WIGOS_{wsi}_{isodate}"
+
+                # now additional metadata elements
+                result["_meta"] = {
+                    "id": rmk,
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            message.get_element('#1#longitude'),
+                            message.get_element('#1#latitude')
+                        ]
+                    },
+                    "properties": {
+                        "md5": message.md5(),
+                        "wigos_station_identifier": wsi,
+                        "datetime": message.get_datetime(),
+                        "originating_centre":
+                        message.get_element("bufrHeaderCentre"),
+                        "data_category": message.get_element("dataCategory")
+                    },
+                    "result": status,
+                    "template": bufr_template,
+                    "csv": csv_string
+                }
+
+                # time_ = datetime.now(timezone.utc).isoformat()
+                # LOGGER.info(f"{time_}|{result['_meta']}")
+
+            # now yield result back to caller
+            yield result
+
+            # Output conversion status to user
+            if conversion_success[tsi]:
+                LOGGER.info(f"Station {tsi} report converted")
+            else:
+                LOGGER.info(f"Station {tsi} report failed to convert")
+
+        # calculate number of successful conversions
+        conversion_count = sum(tsi for tsi in conversion_success.values())
+
+        # print number of messages converted
+        LOGGER.info((f"{conversion_count} / {len(messages)}"
+                    " reports converted successfully"))

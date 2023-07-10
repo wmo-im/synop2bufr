@@ -84,8 +84,8 @@ _keys = ['report_type', 'year', 'month', 'day',
 synop_template = dict.fromkeys(_keys)
 
 THISDIR = os.path.dirname(os.path.realpath(__file__))
-MAPPINGS_307080 = f"{THISDIR}{os.sep}resources{os.sep}synop-mappings-307080.json"
-MAPPINGS_307096 = f"{THISDIR}{os.sep}resources{os.sep}synop-mappings-307096.json"
+MAPPINGS_307080 = f"{THISDIR}{os.sep}resources{os.sep}synop-mappings-307080.json" # noqa
+MAPPINGS_307096 = f"{THISDIR}{os.sep}resources{os.sep}synop-mappings-307096.json" # noqa
 
 # Load template mappings files, this will be updated for each message.
 with open(MAPPINGS_307080) as fh:

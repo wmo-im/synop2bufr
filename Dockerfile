@@ -12,7 +12,7 @@ RUN echo "Acquire::Check-Valid-Until \"false\";\nAcquire::Check-Date \"false\";"
     && apt-get install -y ${DEBIAN_PACKAGES} \
     && apt-get install -y python3 python3-pip libeccodes-tools \
     && pip3 install --no-cache-dir https://github.com/wmo-im/csv2bufr/archive/refs/tags/v0.6.3.zip \
-    && pip3 install --no-cache-dir https://github.com/wmo-im/pymetdecoder/archive/refs/tags/v0.1.7.zip
+    && pip3 install --no-cache-dir https://github.com/wmo-im/pymetdecoder/archive/refs/tags/v0.1.8.zip
 
 ENV LOG_LEVEL=INFO
 

@@ -98,16 +98,55 @@ def data():
 def transform(ctx, synop_file, metadata, output_dir, year, month, verbosity):
 
     try:
-        result = transform_synop(synop_file.read(), metadata.read(),
-                                 year, month)
+        # Get content from synop file
+        content = synop_file.read()
+
+        # Read metadata file contents as a string
+        # metadata_string = metadata.read()
+
+        # Boolean to know if the decoded CSV has a header
+        # or not yet
+        header_written = False
+
+        try:
+            result = transform_synop(
+                content, metadata.read(), year, month
+                )
+
+        except Exception as e:
+            raise click.ClickException(e)
+
+        for item in result:
+            # Write the CSV file of decoded data
+            csv_string = item["_meta"]["csv"]
+            timestamp = item["_meta"]["properties"]["datetime"].strftime(
+                '%Y%m%dT%H%M%S'
+            )
+
+            filename = f"decoded_{timestamp}.csv"
+
+            if header_written:
+                mode = "a"  # Append to file if headers
+            else:
+                mode = "w"  # Write to file if no headers
+
+            with open(filename, mode) as f:
+                if not header_written:
+                    # Write the whole string including headers
+                    f.write(csv_string)
+                    header_written = True
+                else:
+                    # Skip the header row of the string
+                    f.write(csv_string.split("\n")[1])
+
+            # Write the BUFR file
+            key = item['_meta']["id"]
+            bufr_filename = f"{output_dir}{os.sep}{key}.bufr4"
+            with open(bufr_filename, "wb") as fh:
+                fh.write(item["bufr4"])
+
     except Exception as e:
         raise click.ClickException(e)
-
-    for item in result:
-        key = item['_meta']["id"]
-        bufr_filename = f"{output_dir}{os.sep}{key}.bufr4"
-        with open(bufr_filename, "wb") as fh:
-            fh.write(item["bufr4"])
 
 
 data.add_command(transform)

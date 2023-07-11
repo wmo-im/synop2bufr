@@ -32,7 +32,7 @@ from typing import Iterator
 from csv2bufr import BUFRMessage
 from pymetdecoder import synop
 
-__version__ = '0.4.1'
+__version__ = '0.5.dev1'
 
 LOGGER = logging.getLogger(__name__)
 
@@ -41,13 +41,15 @@ FAILED = 0
 PASSED = 1
 
 # Enumerate the keys
-_keys = ['report_type', 'year', 'month', 'day', 'hour', 'minute',
-         'wind_indicator', 'block_no', 'station_no', 'station_id', 'region',
+_keys = ['report_type', 'year', 'month', 'day',
+         'hour', 'minute',
+         'block_no', 'station_no', 'station_id', 'region',
          'WMO_station_type',
          'lowest_cloud_base', 'visibility', 'cloud_cover',
-         'time_significance', 'wind_time_period',
-         'wind_direction', 'wind_speed', 'air_temperature',
-         'dewpoint_temperature', 'relative_humidity', 'station_pressure',
+         'wind_indicator', 'template',
+         'wind_time_period', 'wind_direction', 'wind_speed',
+         'air_temperature', 'dewpoint_temperature',
+         'relative_humidity', 'station_pressure',
          'isobaric_surface', 'geopotential_height', 'sea_level_pressure',
          '3hr_pressure_change', 'pressure_tendency_characteristic',
          'precipitation_s1', 'ps1_time_period', 'present_weather',
@@ -55,9 +57,13 @@ _keys = ['report_type', 'year', 'month', 'day', 'hour', 'minute',
          'cloud_vs_s1', 'cloud_amount_s1', 'low_cloud_type',
          'middle_cloud_type', 'high_cloud_type',
          'maximum_temperature', 'minimum_temperature',
+         'maximum_temperature_period_start',
+         'maximum_temperature_period_end',
+         'minimum_temperature_period_start',
+         'minimum_temperature_period_end',
          'ground_state', 'ground_temperature', 'snow_depth',
          'evapotranspiration', 'evaporation_instrument',
-         'temperature_change', 'tc_time_period',
+         'temperature_change',
          'sunshine_amount_1hr', 'sunshine_amount_24hr',
          'low_cloud_drift_direction', 'low_cloud_drift_vs',
          'middle_cloud_drift_direction', 'middle_cloud_drift_vs',
@@ -72,17 +78,20 @@ _keys = ['report_type', 'year', 'month', 'day', 'hour', 'minute',
          'net_short_wave_radiation_1hr', 'net_short_wave_radiation_24hr',
          'direct_solar_radiation_1hr', 'direct_solar_radiation_24hr',
          'precipitation_s3', 'ps3_time_period', 'precipitation_24h',
-         'highest_gust_1', 'highest_gust_2', 'hg2_time_period']
+         'highest_gust_1', 'highest_gust_2']
 
 # Build the dictionary template
 synop_template = dict.fromkeys(_keys)
 
 THISDIR = os.path.dirname(os.path.realpath(__file__))
-MAPPINGS = f"{THISDIR}{os.sep}resources{os.sep}synop-mappings.json"
+MAPPINGS_307080 = f"{THISDIR}{os.sep}resources{os.sep}synop-mappings-307080.json" # noqa
+MAPPINGS_307096 = f"{THISDIR}{os.sep}resources{os.sep}synop-mappings-307096.json" # noqa
 
-# Load template mappings file, this will be updated for each message.
-with open(MAPPINGS) as fh:
-    _mapping = json.load(fh)
+# Load template mappings files, this will be updated for each message.
+with open(MAPPINGS_307080) as fh:
+    _mapping_307080 = json.load(fh)
+with open(MAPPINGS_307096) as fh:
+    _mapping_307096 = json.load(fh)
 
 
 def parse_synop(message: str, year: int, month: int) -> dict:
@@ -143,26 +152,32 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     if 'wind_indicator' in decoded:
         try:
             iw = decoded['wind_indicator']['value']
-        except Exception:
-            iw = None
-        # In this conversion, we convert bit number to a value (see code table
-        # 0 02 002)  # noq
-        # Not bit 3 should never be set for synop, units of km/h not reportable
-        if iw == 0:
-            iw_translated = 0b0000  # Wind in m/s, default, no bits set
-        elif iw == 1:
-            iw_translated = 0b1000  # Wind in m/s with anemometer bit 1 (left most) set  # noqa
-        elif iw == 3:
-            iw_translated = 0b0100  # Wind in knots, bit 2 set
-        elif iw == 4:
-            iw_translated = 0b1100  # Wind in knots with anemometer, bits
-            # 1 and 2 set # noq
-        else:
-            iw_translated = None  # 0b1111  # Missing value
-    else:
-        iw_translated = None  # 0b1111  # Missing value
 
-    output['wind_indicator'] = iw_translated
+            # Note bit 3 should never be set for synop, units
+            # of km/h not reportable
+            if iw == 0:
+                iw_translated = 0b0000  # Wind in m/s, default, no bits set
+                output['template'] = 307080
+            elif iw == 1:
+                iw_translated = 0b1000  # Wind in m/s with anemometer bit 1 (left most) set  # noqa
+                output['template'] = 307096
+            elif iw == 3:
+                iw_translated = 0b0100  # Wind in knots, bit 2 set
+                output['template'] = 307080
+            elif iw == 4:
+                iw_translated = 0b1100  # Wind in knots with anemometer, bits
+                # 1 and 2 set # noq
+                output['template'] = 307096
+            else:
+                iw_translated = None  # 0b1111  # Missing value
+                output['template'] = 307080
+
+            output['wind_indicator'] = iw_translated
+        except Exception:
+            output['wind_indicator'] = None
+            output['template'] = 307080
+    else:
+        output['template'] = 307080
 
     if 'station_id' in decoded:
         try:
@@ -175,7 +190,14 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             output['station_id'] = None
             output['block_no'] = None
             output['station_no'] = None
-    # ! Removed region and precipitation indicator as they are redundant
+    # ! Removed precipitation indicator as it is redundant
+
+    # Get region of report
+    if 'region' in decoded:
+        try:
+            output['region'] = decoded['region']['value']
+        except Exception:
+            output['region'] = None
 
     # We translate this station type flag from the SYNOP code to the BUFR code
     if 'weather_indicator' in decoded:
@@ -228,32 +250,37 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             output['cloud_cover'] = None
 
     # Wind direction is already in degrees
-    if 'surface_wind' in decoded:
+    if ('surface_wind' in decoded):
         # See B/C1.10.5.3
         # NOTE: Every time period in the following code shall be a negative number,  # noqa
         # to indicate measurements have been taken up until the present.
-        output['time_significance'] = 2
         output['wind_time_period'] = -10
 
-        if decoded['surface_wind']['direction'] is not None:
-            try:
-                output['wind_direction'] = decoded['surface_wind']['direction']['value']  # noqa
-            except Exception:
-                output['wind_direction'] = None
+        try:
 
-        # Wind speed in units specified by 'wind_indicator', convert to m/s
-        if decoded['surface_wind']['speed'] is not None:
-            try:
-                ff = decoded['surface_wind']['speed']['value']
-                # Find the units
-                ff_unit = decoded['wind_indicator']['unit']
+            if decoded['surface_wind']['direction'] is not None:
+                try:
+                    output['wind_direction'] = decoded['surface_wind']['direction']['value']  # noqa
+                except Exception:
+                    output['wind_direction'] = None
 
-                # If units are knots instead of m/s, convert it to knots
-                if ff_unit == 'KT':
-                    ff *= 0.51444
-                output['wind_speed'] = ff
-            except Exception:
-                output['wind_speed'] = None
+            # Wind speed in units specified by 'wind_indicator', convert to m/s
+            if decoded['surface_wind']['speed'] is not None:
+                try:
+                    ff = decoded['surface_wind']['speed']['value']
+                    # Find the units
+                    ff_unit = decoded['wind_indicator']['unit']
+
+                    # If units are knots instead of m/s, convert it to knots
+                    if ff_unit == 'KT':
+                        ff *= 0.51444
+                    output['wind_speed'] = ff
+                except Exception:
+                    output['wind_speed'] = None
+
+        except Exception:
+            output['wind_direction'] = None
+            output['wind_speed'] = None
 
     # Temperatures are given in Celsius, convert to kelvin and round to 2 dp
     if 'air_temperature' in decoded:
@@ -264,14 +291,14 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     if 'dewpoint_temperature' in decoded:
         try:
-            output['dewpoint_temperature'] = round(decoded['dewpoint_temperature']['value'] +273.15, 2)  # noqa
+            output['dewpoint_temperature'] = round(decoded['dewpoint_temperature']['value'] + 273.15, 2)  # noqa
         except Exception:
             output['dewpoint_temperature'] = None
 
     # RH is already given in %
     if 'relative_humidity' in decoded:
         try:
-            output['relative_humidity'] = decoded['relative_humidity']
+            output['relative_humidity'] = decoded['relative_humidity']['value']
         except Exception:
             output['relative_humidity'] = None
 
@@ -304,7 +331,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     # pressure has precision in tens of Pa
     if 'station_pressure' in decoded:
         try:
-            output['station_pressure'] = round(decoded['station_pressure']['value'] * 100, -1) # noqa
+            output['station_pressure'] = round(decoded['station_pressure']['value'] * 100, -1)  # noqa
         except Exception:
             output['station_pressure'] = None
 
@@ -317,7 +344,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     if 'geopotential' in decoded:
         try:
-            output['isobaric_surface'] = round( decoded['geopotential']['surface']['value'] * 100, 1)  # noqa
+            output['isobaric_surface'] = round(decoded['geopotential']['surface']['value'] * 100, 1)  # noqa
         except Exception:
             output['isobaric_surface'] = None
         try:
@@ -328,7 +355,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     if 'pressure_tendency' in decoded:
         #  By B/C1.3.3, pressure has precision in tens of Pa
         try:
-            output['3hr_pressure_change'] = round(decoded['pressure_tendency']['change']['value'] * 100, -1) # noqa
+            output['3hr_pressure_change'] = round(decoded['pressure_tendency']['change']['value'] * 100, -1)  # noqa
         except Exception:
             output['3hr_pressure_change'] = None
 
@@ -491,19 +518,79 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             output['maximum_temperature'] = decoded['maximum_temperature']['value']  # noqa
             if output['maximum_temperature'] is not None:
                 output['maximum_temperature'] = round(output['maximum_temperature'] + 273.15, 2)  # noqa
+
         except Exception:
             output['maximum_temperature'] = None
 
-            #  Group 2 2snTnTnTn - gives minimum temperature over a time period
+    #  Group 2 2snTnTnTn - gives minimum temperature over a time period
     # decided by the region
     if ('minimum_temperature' in decoded and decoded['minimum_temperature'] is not None):  # noqa
         #  Convert to Kelvin and round to required precision
         try:
             output['minimum_temperature'] = decoded['minimum_temperature']['value']  # noqa
             if output['minimum_temperature'] is not None:
-                output['minimum_temperature'] = round( output['minimum_temperature'] + 273.15, 2)  # noqa
+                output['minimum_temperature'] = round(output['minimum_temperature'] + 273.15, 2)  # noqa
         except Exception:
             output['minimum_temperature'] = None
+
+    # Now calculate the associated time periods for the max and min temps
+    try:
+        if output['region'] in ['Antarctic', 'I', 'II', 'III', 'VI']:
+            # Extremes recorded over past 12 hours
+            output['maximum_temperature_period_start'] = -12
+            output['minimum_temperature_period_start'] = -12
+
+        elif output['region'] == 'V':
+            # Extremes recorded over past 24 hours
+            output['maximum_temperature_period_start'] = -24
+            output['minimum_temperature_period_start'] = -24
+
+        elif output['region'] == 'IV':
+            # If time is 0000 UTC, extremes recorded over 12 and 18
+            # hours respectively
+            if output['hour'] == 0:
+                output['maximum_temperature_period_start'] = -12
+                output['minimum_temperature_period_start'] = -18
+
+            # If time is 0600 UTC, extremes recorded over 24 hours
+            elif output['hour'] == 6:
+                output['maximum_temperature_period_start'] = -24
+                output['minimum_temperature_period_start'] = -24
+
+            # If time is 1200 UTC, maximum is recorded over the previous
+            # day and the minimum is recorded over the previous 12 hours
+            elif output['hour'] == 12:
+                output['maximum_temperature_period_start'] = -36
+                output['minimum_temperature_period_start'] = -12
+
+            # If time is 1800 UTC, extremes recorded over 12 and 24
+            # hours respectively
+            elif output['hour'] == 18:
+                output['maximum_temperature_period_start'] = -12
+                output['minimum_temperature_period_start'] = -24
+
+        # We now set the end of the time periods to be the time of the
+        # observation (0), unless it is the maximum temperature of
+        # the previous calendar day (when the time period started
+        # 36 hours before the observation)
+        if output['maximum_temperature_period_start'] == -36:
+            output['maximum_temperature_period_end'] = -12
+        else:
+            output['maximum_temperature_period_end'] = 0
+
+        # NOTE: I believe the minimum temperature time period always ends
+        # at the time of the observation, even for region III
+        # (see pg. 97 of the regional manual on codes). However, this
+        # is contradicted the BUFR manual (note 2 on pg. 1069) thus
+        # we define this as a variable rather than a constant in the mapping
+        # file in case changes need to be made in the future.
+        output['minimum_temperature_period_end'] = 0
+
+    except Exception:
+        output['maximum_temperature_period_start'] = None
+        output['minimum_temperature_period_start'] = None
+        output['maximum_temperature_period_end'] = None
+        output['minimum_temperature_period_end'] = None
 
     #  Group 3 3Ejjj
     # NOTE: According to SYNOP manual 12.4.5, the group is
@@ -524,7 +611,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
         if decoded['ground_state']['temperature'] is not None:
             try:
                 #  Convert to Kelvin
-                output['ground_temperature'] = round( decoded['ground_state']['temperature']['value'] + 273.15, 2)  # noqa
+                output['ground_temperature'] = round(decoded['ground_state']['temperature']['value'] + 273.15, 2)  # noqa
             except Exception:
                 output['ground_temperature'] = None
 
@@ -580,11 +667,6 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     # Temperature change 54g0sndT
     if 'temperature_change' in decoded:
-        if decoded['temperature_change']['time_before_obs'] is not None:
-            try:
-                output['tc_time_period'] = -1 * decoded['temperature_change']['time_before_obs']['value']  # noqa
-            except Exception:
-                output['tc_time_period'] = None
 
         if decoded['temperature_change']['change'] is not None:
             try:
@@ -971,7 +1053,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     #  wind gust speed for region VI (groups 910fmfm and 911fxfx).
     #  These are given and required to be in m/s.
 
-    if 'highest_gust' in decoded:
+    if ('highest_gust' in decoded):
         try:
             output['highest_gust_1'] = decoded['highest_gust']['gust_1']['speed']['value']  # noqa
         except Exception:
@@ -980,18 +1062,6 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             output['highest_gust_2'] = decoded['highest_gust']['gust_2']['speed']['value']  # noqa
         except Exception:
             output['highest_gust_2'] = None
-    #  Regulation 6/12.12.2 in the WMO regional guide tells us that the
-    #  1st max gust speed has fixed time period 10 minutes, and the 2nd has
-    #  time period equal to the length of the observation time in minutes.
-    # NOTE: All time periods must be negative
-    if hr % 6 == 0:
-        output['hg2_time_period'] = -6*60
-    elif hr % 3 == 0:
-        output['hg2_time_period'] = -3*60
-    elif hr % 2 == 0:
-        output['hg2_time_period'] = -2*60
-    else:
-        output['hg2_time_period'] = -60
 
     # ! SECTION 4
 
@@ -1162,219 +1232,271 @@ def transform(data: str, metadata: str, year: int,
         LOGGER.error("Invalid metadata")
         raise ValueError
 
-    # Now extract individual synop reports from string
-    try:
-        messages = extract_individual_synop(data)
-    except Exception as e:
-        LOGGER.error(e)
-        return None
+    # ===========================================
+    # Split the data by the end of message signal
+    # ===========================================
+    gts_messages = data.upper().split("NNNN")
 
-    # Count how many conversions were successful using a dictionary
-    conversion_success = {}
+    # Remove leading or trailing whitespaces from these
+    # messages and ignore empty messages after the final NNNN
+    gts_messages = [msg.strip()
+                    for msg in gts_messages if msg != ""]
 
-    # Now we need to iterate over the reports, parsing and converting to BUFR
-    for message in messages:
-        # check we have date
-        if message is None:
-            continue
-        # create dictionary to store / return result in
-        result = dict()
+    # =====================================
+    # Repeat transform for each GTS message
+    # =====================================
+    for gts_msg in gts_messages:
 
-        # get mapping template, this needs to be reloaded everytime as each
-        # SYNOP can have a different number of
-        # replications
-        mapping = deepcopy(_mapping)
-
-        # parse data to dictionary and get number of section 3 and 4
-        # clouds
+        # Now extract individual synop reports from string
         try:
-            msg, num_s3_clouds, num_s4_clouds = \
-                parse_synop(message, year, month)
-            # get TSI
-            tsi = msg['station_id']
-        except Exception as e:
-            LOGGER.error(f"Error parsing SYNOP report: {message}. {str(e)}")
-            continue
-
-        # set WSI
-        try:
-            wsi = tsi_mapping[tsi]
-        except Exception:
-            conversion_success[tsi] = False
-            LOGGER.warning(f"Station {tsi} not found in station file")
-
-        # parse WSI to get sections
-        try:
-            wsi_series, wsi_issuer, wsi_issue_number, wsi_local = wsi.split("-")   # noqa
-
-            # get other required metadata
-            latitude = metadata_dict[wsi]["latitude"]
-            longitude = metadata_dict[wsi]["longitude"]
-            station_height = metadata_dict[wsi]["elevation"]
-
-            # add these values to the data dictionary
-            msg['_wsi_series'] = wsi_series
-            msg['_wsi_issuer'] = wsi_issuer
-            msg['_wsi_issue_number'] = wsi_issue_number
-            msg['_wsi_local'] = wsi_local
-            msg['_latitude'] = latitude
-            msg['_longitude'] = longitude
-            msg['_station_height'] = station_height
-            conversion_success[tsi] = True
-        except Exception:
-            conversion_success[tsi] = False
-
-            if wsi == "":
-                LOGGER.warning(f"Missing WSI for station {tsi}")
-            else:
-                LOGGER.warning((f"Invalid WSI ({wsi}) found in station file,"
-                                " unable to parse"))
-
-        for idx in range(num_s3_clouds):
-            # Build the dictionary of mappings for section 3 group 8NsChshs
-
-            # NOTE: The following keys have been used before so the replicator
-            # has to be increased:
-            # - cloudAmount: used 2 times (Nh, Ns)
-            # - cloudType: used 4 times (CL, CM, CH, C)
-            # - heightOfBaseOfCloud: used 1 time (h)
-            # - verticalSignificance: used 7 times (for N, low-high cloud
-            # amount, low-high cloud drift)
-            s3_mappings = [
-                {"eccodes_key": (
-                    f"#{idx+8}"
-                    "#verticalSignificanceSurfaceObservations"
-                ),
-                    "value": f"data:vs_s3_{idx+1}"},
-                {"eccodes_key": f"#{idx+3}#cloudAmount",
-                 "value": f"data:cloud_amount_s3_{idx+1}"},
-                {"eccodes_key": f"#{idx+5}#cloudType",
-                 "value": f"data:cloud_genus_s3_{idx+1}"},
-                {"eccodes_key": f"#{idx+2}#heightOfBaseOfCloud",
-                 "value": f"data:cloud_height_s3_{idx+1}"}
-            ]
-            mapping.update(s3_mappings[i] for i in range(4))
-
-        for idx in range(num_s4_clouds):
-            # Based upon the station height metadata, the value of vertical
-            # significance for section 4 groups can be determined.
-            # Specifically, by B/C1.5.2.1, clouds with bases below but tops
-            # above station level have vertical significance code 10.
-            # Clouds with bases and tops below station level have vertical
-            # significance code 11.
-            cloud_top_height = msg[f'cloud_height_s4_{idx+1}']
-
-            if cloud_top_height > int(station_height):
-                vs_s4 = 10
-            else:
-                vs_s4 = 11
-
-            # NOTE: Some of the ecCodes keys are used in the above, so we must
-            # add 'num_s3_clouds'
-            s4_mappings = [
-                {"eccodes_key": (
-                    f"#{idx+num_s3_clouds+8}"
-                    "#verticalSignificanceSurfaceObservations"
-                ),
-                    "value": f"const:{vs_s4}"},
-                {"eccodes_key": f"#{idx+num_s3_clouds+3}#cloudAmount",
-                 "value": f"data:cloud_amount_s4_{idx+1}"},
-                {"eccodes_key": f"#{idx+num_s3_clouds+5}#cloudType",
-                 "value": f"data:cloud_genus_s4_{idx+1}"},
-                {"eccodes_key": f"#{idx+1}#heightOfTopOfCloud",
-                 "value": f"data:cloud_height_s4_{idx+1}"},
-                {"eccodes_key": f"#{idx+1}#cloudTopDescription",
-                 "value": f"data:cloud_top_s4_{idx+1}"}
-            ]
-            mapping.update(s4_mappings[i] for i in range(4))
-
-        # At this point we have a dictionary for the data, a
-        # dictionary of the mappings and the metadata
-        # The last step is to convert to BUFR.
-        unexpanded_descriptors = [301150, 307080]
-        short_delayed_replications = []
-        # update replications
-        delayed_replications = [max(1, num_s3_clouds), max(1, num_s4_clouds)]
-        extended_delayed_replications = []
-        table_version = 37
-        try:
-            # create new BUFR msg
-            message = BUFRMessage(
-                unexpanded_descriptors,
-                short_delayed_replications,
-                delayed_replications,
-                extended_delayed_replications,
-                table_version)
+            messages = extract_individual_synop(gts_msg)
         except Exception as e:
             LOGGER.error(e)
-            LOGGER.error("Error creating BUFRMessage")
-            conversion_success[tsi] = False
+            return None
 
-        # parse
-        if conversion_success[tsi]:
+        # Count how many conversions were successful using a dictionary
+        conversion_success = {}
+
+        # Now we need to iterate over the reports, parsing
+        # and converting to BUFR
+        for message in messages:
+            # check we have date
+            if message is None:
+                continue
+            # create dictionary to store / return result in
+            result = dict()
+
+            # parse data to dictionary and get number of section 3 and 4
+            # clouds
             try:
-                message.parse(msg, mapping)
+                msg, num_s3_clouds, num_s4_clouds = \
+                    parse_synop(message, year, month)
+                # get TSI
+                tsi = msg['station_id']
             except Exception as e:
-                LOGGER.error(e)
-                LOGGER.error("Error parsing message")
+                LOGGER.error(
+                    f"Error parsing SYNOP report: {message}. {str(e)}")
+                continue
+
+            # Now determine and load the appropriate mappings
+            # file depending on the value of the wind indicator.
+            # This will be updated for each message.
+            bufr_template = msg['template']
+            if bufr_template == 307096:
+                # Get mapping template, this needs to be
+                # reloaded everytime as each SYNOP can have a
+                # different number of replications
+                mapping = deepcopy(_mapping_307096)
+            else:
+                # Get mapping template, this needs to be
+                # reloaded everytime as each SYNOP can have a
+                # different number of replications
+                mapping = deepcopy(_mapping_307080)
+
+            # set WSI
+            try:
+                wsi = tsi_mapping[tsi]
+            except Exception:
+                conversion_success[tsi] = False
+                LOGGER.warning(f"Station {tsi} not found in station file")
+
+            # parse WSI to get sections
+            try:
+                wsi_series, wsi_issuer, wsi_issue_number, wsi_local = wsi.split("-")   # noqa
+
+                # get other required metadata
+                latitude = metadata_dict[wsi]["latitude"]
+                longitude = metadata_dict[wsi]["longitude"]
+                station_height = metadata_dict[wsi]["elevation"]
+                barometer_height = metadata_dict[wsi]["barometer_height"]
+
+                # add these values to the data dictionary
+                msg['_wsi_series'] = wsi_series
+                msg['_wsi_issuer'] = wsi_issuer
+                msg['_wsi_issue_number'] = wsi_issue_number
+                msg['_wsi_local'] = wsi_local
+                msg['_latitude'] = latitude
+                msg['_longitude'] = longitude
+                msg['_station_height'] = station_height
+                msg['_barometer_height'] = barometer_height
+                conversion_success[tsi] = True
+            except Exception:
                 conversion_success[tsi] = False
 
-        # Only convert to BUFR if there's no errors so far
-        if conversion_success[tsi]:
-            try:
-                result["bufr4"] = message.as_bufr()  # encode to BUFR
-                status = {"code": PASSED}
+                if wsi == "":
+                    LOGGER.warning(f"Missing WSI for station {tsi}")
+                else:
+                    LOGGER.warning((f"Invalid metadata for station {tsi} found"
+                                    " station file, unable to parse"))
 
+            for idx in range(num_s3_clouds):
+                # Build the dictionary of mappings for section 3 group 8NsChshs
+
+                # NOTE: The following keys have been used
+                # before so the replicator has to be increased:
+                # - cloudAmount: used 2 times (Nh, Ns)
+                # - cloudType: used 4 times (CL, CM, CH, C)
+                # - heightOfBaseOfCloud: used 1 time (h)
+                # - verticalSignificance: used 7 times (for N, low-high cloud
+                # amount, low-high cloud drift)
+                s3_mappings = [
+                    {"eccodes_key": (
+                        f"#{idx+8}"
+                        "#verticalSignificanceSurfaceObservations"
+                    ),
+                        "value": f"data:vs_s3_{idx+1}"},
+                    {"eccodes_key": f"#{idx+3}#cloudAmount",
+                     "value": f"data:cloud_amount_s3_{idx+1}"},
+                    {"eccodes_key": f"#{idx+5}#cloudType",
+                     "value": f"data:cloud_genus_s3_{idx+1}"},
+                    {"eccodes_key": f"#{idx+2}#heightOfBaseOfCloud",
+                     "value": f"data:cloud_height_s3_{idx+1}"}
+                ]
+                mapping.update(s3_mappings[i] for i in range(4))
+
+            for idx in range(num_s4_clouds):
+                # Based upon the station height metadata, the value of vertical
+                # significance for section 4 groups can be determined.
+                # Specifically, by B/C1.5.2.1, clouds with bases below but tops
+                # above station level have vertical significance code 10.
+                # Clouds with bases and tops below station level have vertical
+                # significance code 11.
+                cloud_top_height = msg[f'cloud_height_s4_{idx+1}']
+
+                if cloud_top_height > int(station_height):
+                    vs_s4 = 10
+                else:
+                    vs_s4 = 11
+
+                # NOTE: Some of the ecCodes keys are used in
+                # the above, so we must add 'num_s3_clouds'
+                s4_mappings = [
+                    {"eccodes_key": (
+                        f"#{idx+num_s3_clouds+8}"
+                        "#verticalSignificanceSurfaceObservations"
+                    ),
+                        "value": f"const:{vs_s4}"},
+                    {"eccodes_key": f"#{idx+num_s3_clouds+3}#cloudAmount",
+                     "value": f"data:cloud_amount_s4_{idx+1}"},
+                    {"eccodes_key": f"#{idx+num_s3_clouds+5}#cloudType",
+                     "value": f"data:cloud_genus_s4_{idx+1}"},
+                    {"eccodes_key": f"#{idx+1}#heightOfTopOfCloud",
+                     "value": f"data:cloud_height_s4_{idx+1}"},
+                    {"eccodes_key": f"#{idx+1}#cloudTopDescription",
+                     "value": f"data:cloud_top_s4_{idx+1}"}
+                ]
+                mapping.update(s4_mappings[i] for i in range(4))
+
+            # At this point we have a dictionary for the data, a
+            # dictionary of the mappings and the metadata
+            # The last step is to convert to BUFR.
+            unexpanded_descriptors = [301150, bufr_template]
+            short_delayed_replications = []
+            # update replications
+            delayed_replications = [max(1, num_s3_clouds),
+                                    max(1, num_s4_clouds)]
+            extended_delayed_replications = []
+            table_version = 37
+            try:
+                # create new BUFR msg
+                message = BUFRMessage(
+                    unexpanded_descriptors,
+                    short_delayed_replications,
+                    delayed_replications,
+                    extended_delayed_replications,
+                    table_version)
             except Exception as e:
-                LOGGER.error("Error encoding BUFR, null returned")
                 LOGGER.error(e)
-                result["bufr4"] = None
-                status = {
-                    "code": FAILED,
-                    "message": f"Error encoding, BUFR set to None:\n\t\tError: {e}\n\t\tMessage: {msg}"  # noqa
+                LOGGER.error("Error creating BUFRMessage")
+                conversion_success[tsi] = False
+
+            # parse
+            if conversion_success[tsi]:
+                try:
+                    # Parse to BUFRMessage object
+                    message.parse(msg, mapping)
+                except Exception as e:
+                    LOGGER.error(e)
+                    LOGGER.error("Error parsing message")
+                    conversion_success[tsi] = False
+
+            # Only convert to BUFR if there's no errors so far
+            if conversion_success[tsi]:
+                try:
+                    result["bufr4"] = message.as_bufr()  # encode to BUFR
+                    status = {"code": PASSED}
+
+                except Exception as e:
+                    LOGGER.error("Error encoding BUFR, null returned")
+                    LOGGER.error(e)
+                    result["bufr4"] = None
+                    status = {
+                        "code": FAILED,
+                        "message": f"Error encoding, BUFR set to None:\n\t\tError: {e}\n\t\tMessage: {msg}"  # noqa
+                    }
+                    conversion_success[tsi] = False
+
+                # now identifier based on WSI and observation
+                # date as identifier
+                isodate = message.get_datetime().strftime('%Y%m%dT%H%M%S')
+
+                # Write message to CSV object in memory
+                try:
+                    csv_object = StringIO()
+                    dict_writer = csv.DictWriter(csv_object, msg.keys())
+
+                    # Add headers
+                    dict_writer.writeheader()
+
+                    # Write data to rows
+                    dict_writer.writerow(msg)
+
+                    # Get string from CSV object
+                    csv_string = csv_object.getvalue()
+                except Exception:
+                    LOGGER.warning(
+                        f"Unable to write report of station {tsi} to CSV")
+
+                rmk = f"WIGOS_{wsi}_{isodate}"
+
+                # now additional metadata elements
+                result["_meta"] = {
+                    "id": rmk,
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            message.get_element('#1#longitude'),
+                            message.get_element('#1#latitude')
+                        ]
+                    },
+                    "properties": {
+                        "md5": message.md5(),
+                        "wigos_station_identifier": wsi,
+                        "datetime": message.get_datetime(),
+                        "originating_centre":
+                        message.get_element("bufrHeaderCentre"),
+                        "data_category": message.get_element("dataCategory")
+                    },
+                    "result": status,
+                    "template": bufr_template,
+                    "csv": csv_string
                 }
-                conversion_success[tsi] = False
 
-            # now identifier based on WSI and observation date as identifier
-            isodate = message.get_datetime().strftime('%Y%m%dT%H%M%S')
-            rmk = f"WIGOS_{wsi}_{isodate}"
+                # time_ = datetime.now(timezone.utc).isoformat()
+                # LOGGER.info(f"{time_}|{result['_meta']}")
 
-            # now additional metadata elements
-            result["_meta"] = {
-                "id": rmk,
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": [
-                        message.get_element('#1#longitude'),
-                        message.get_element('#1#latitude')
-                    ]
-                },
-                "properties": {
-                    "md5": message.md5(),
-                    "wigos_station_identifier": wsi,
-                    "datetime": message.get_datetime(),
-                    "originating_centre":
-                    message.get_element("bufrHeaderCentre"),
-                    "data_category": message.get_element("dataCategory")
-                },
-                "result": status
-            }
+            # now yield result back to caller
+            yield result
 
-            # time_ = datetime.now(timezone.utc).isoformat()
-            # LOGGER.info(f"{time_}|{result['_meta']}")
+            # Output conversion status to user
+            if conversion_success[tsi]:
+                LOGGER.info(f"Station {tsi} report converted")
+            else:
+                LOGGER.info(f"Station {tsi} report failed to convert")
 
-        # now yield result back to caller
-        yield result
+        # calculate number of successful conversions
+        conversion_count = sum(tsi for tsi in conversion_success.values())
 
-        # Output conversion status to user
-        if conversion_success[tsi]:
-            LOGGER.info(f"Station {tsi} report converted")
-        else:
-            LOGGER.info(f"Station {tsi} report failed to convert")
-
-    # calculate number of successful conversions
-    conversion_count = sum(tsi for tsi in conversion_success.values())
-
-    # print number of messages converted
-    LOGGER.info((f"{conversion_count} / {len(messages)}"
-                 " reports converted successfully"))
+        # print number of messages converted
+        LOGGER.info((f"{conversion_count} / {len(messages)}"
+                    " reports converted successfully"))

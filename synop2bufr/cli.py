@@ -101,9 +101,6 @@ def transform(ctx, synop_file, metadata, output_dir, year, month, verbosity):
         # Get content from synop file
         content = synop_file.read()
 
-        # Read metadata file contents as a string
-        # metadata_string = metadata.read()
-
         # Boolean to know if the decoded CSV has a header
         # or not yet
         header_written = False

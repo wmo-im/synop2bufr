@@ -1258,7 +1258,9 @@ def transform(data: str, metadata: str, year: int,
             messages = extract_individual_synop(gts_msg)
         except Exception as e:
             LOGGER.error(e)
-            error_msgs.append(e)
+            error_msgs.append(str(e))
+            messages = []  # Fallback to an empty list if no reports extracted
+            yield {'warnings': warning_msgs, 'errors': error_msgs}
 
         # Count how many conversions were successful using a dictionary
         conversion_success = {}
@@ -1266,7 +1268,7 @@ def transform(data: str, metadata: str, year: int,
         # Now we need to iterate over the reports, parsing
         # and converting to BUFR
         for message in messages:
-            # check we have date
+            # check we have data
             if message is None:
                 continue
             # create dictionary to store / return result in
@@ -1281,8 +1283,9 @@ def transform(data: str, metadata: str, year: int,
                 tsi = msg['station_id']
             except Exception as e:
                 LOGGER.error(
-                    f"Error parsing SYNOP report: {message}. {str(e)}")
-                error_msgs.append(f"Error parsing SYNOP report: {message}. {str(e)}")  # noqa
+                    f"Error parsing SYNOP report: {message}. {str(e)}!")
+                error_msgs.append(f"Error parsing SYNOP report: {message}. {str(e)}!")  # noqa
+                yield {'warnings': warning_msgs, 'errors': error_msgs}
                 continue
 
             # Now determine and load the appropriate mappings
@@ -1338,21 +1341,26 @@ def transform(data: str, metadata: str, year: int,
                     LOGGER.warning(f"Missing WSI for station {tsi}")
                     warning_msgs.append(f"Missing WSI for station {tsi}")
                 else:
-                    LOGGER.warning(f"Invalid metadata for station {tsi} found in station file, unable to parse")  # noqa
-                    warning_msgs.append(f"Invalid metadata for station {tsi}found in station file, unable to parse")  # noqa
+                    # If station has not been found in the station
+                    # list, don't repeat warning unnecessarily
+                    if not (f"Station {tsi} not found in station file"
+                            in warning_msgs):
+                        LOGGER.warning(f"Invalid metadata for station {tsi} found in station file, unable to parse")  # noqa
+                        warning_msgs.append(f"Invalid metadata for station {tsi} found in station file, unable to parse")  # noqa
 
             try:
 
                 for idx in range(num_s3_clouds):
-                    # Build the dictionary of mappings for section 3 group 8NsChshs
+                    # Build the dictionary of mappings for section 3
+                    # group 8NsChshs
 
                     # NOTE: The following keys have been used
                     # before so the replicator has to be increased:
                     # - cloudAmount: used 2 times (Nh, Ns)
                     # - cloudType: used 4 times (CL, CM, CH, C)
                     # - heightOfBaseOfCloud: used 1 time (h)
-                    # - verticalSignificance: used 7 times (for N, low-high cloud
-                    # amount, low-high cloud drift)
+                    # - verticalSignificance: used 7 times (for N,
+                    # low-high cloud amount, low-high cloud drift)
                     s3_mappings = [
                         {"eccodes_key": (
                             f"#{idx+8}"
@@ -1369,12 +1377,14 @@ def transform(data: str, metadata: str, year: int,
                     mapping.update(s3_mappings[i] for i in range(4))
 
                 for idx in range(num_s4_clouds):
-                    # Based upon the station height metadata, the value of vertical
-                    # significance for section 4 groups can be determined.
-                    # Specifically, by B/C1.5.2.1, clouds with bases below but tops
-                    # above station level have vertical significance code 10.
-                    # Clouds with bases and tops below station level have vertical
-                    # significance code 11.
+                    # Based upon the station height metadata, the
+                    # value of vertical significance for section 4
+                    # groups can be determined.
+                    # Specifically, by B/C1.5.2.1, clouds with bases
+                    # below but tops above station level have vertical
+                    # significance code 10.
+                    # Clouds with bases and tops below station level
+                    # have vertical significance code 11.
                     cloud_top_height = msg[f'cloud_height_s4_{idx+1}']
 
                     if cloud_top_height > int(station_height):
@@ -1466,9 +1476,7 @@ def transform(data: str, metadata: str, year: int,
 
                 try:
                     result["bufr4"] = message.as_bufr()  # encode to BUFR
-                    status = {"code": PASSED,
-                              "warnings": warning_msgs,
-                              "errors": "None"}
+                    status = {"code": PASSED}
 
                 except Exception as e:
                     LOGGER.error("Error encoding BUFR, null returned")
@@ -1477,9 +1485,7 @@ def transform(data: str, metadata: str, year: int,
                     result["bufr4"] = None
                     status = {
                         "code": FAILED,
-                        "message": "Error encoding, BUFR set to None",
-                        "warnings": warning_msgs,
-                        "errors": error_msgs
+                        "message": "Error encoding, BUFR set to None"
                     }
                     conversion_success[tsi] = False
 
@@ -1508,8 +1514,8 @@ def transform(data: str, metadata: str, year: int,
                     "csv": csv_string
                 }
 
-                # time_ = datetime.now(timezone.utc).isoformat()
-                # LOGGER.info(f"{time_}|{result['_meta']}")
+            result["warnings"] = warning_msgs
+            result["errors"] = error_msgs
 
             # now yield result back to caller
             yield result
@@ -1523,6 +1529,6 @@ def transform(data: str, metadata: str, year: int,
         # calculate number of successful conversions
         conversion_count = sum(tsi for tsi in conversion_success.values())
 
-        # print number of messages converted
+        # Log number of messages converted
         LOGGER.info((f"{conversion_count} / {len(messages)}"
                     " reports converted successfully"))

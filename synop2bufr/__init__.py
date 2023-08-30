@@ -32,7 +32,7 @@ from typing import Iterator
 from csv2bufr import BUFRMessage
 from pymetdecoder import synop
 
-__version__ = '0.5.dev1'
+__version__ = '0.5.1'
 
 LOGGER = logging.getLogger(__name__)
 
@@ -123,7 +123,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     output['year'] = year
     output['month'] = month
 
-    if 'obs_time' in decoded:
+    if decoded.get('obs_time') is not None:
         try:
             output['day'] = decoded['obs_time']['day']['value']
         except Exception:
@@ -134,7 +134,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             output['hour'] = None
 
             # The minute will be 00 unless specified by exact observation time
-    if 'exact_obs_time' in decoded:
+    if decoded.get('exact_obs_time') is not None:
         try:
             output['minute'] = decoded['exact_obs_time']['minute']['value']
         except Exception:
@@ -149,7 +149,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
         output['minute'] = 0
 
     # Translate wind instrument flag from the SYNOP code to the BUFR code
-    if 'wind_indicator' in decoded:
+    if decoded.get('wind_indicator') is not None:
         try:
             iw = decoded['wind_indicator']['value']
 
@@ -179,7 +179,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     else:
         output['template'] = 307080
 
-    if 'station_id' in decoded:
+    if decoded.get('station_id') is not None:
         try:
             tsi = decoded['station_id']['value']
             output['station_id'] = tsi
@@ -193,14 +193,14 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     # ! Removed precipitation indicator as it is redundant
 
     # Get region of report
-    if 'region' in decoded:
+    if decoded.get('region') is not None:
         try:
             output['region'] = decoded['region']['value']
         except Exception:
             output['region'] = None
 
     # We translate this station type flag from the SYNOP code to the BUFR code
-    if 'weather_indicator' in decoded:
+    if decoded.get('weather_indicator') is not None:
         try:
             ix = decoded['weather_indicator']['value']
             if ix <= 3:
@@ -221,14 +221,14 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     # Lowest cloud base is already given in metres, but we specifically select
     # the minimum value  # noq
     # NOTE: By B/C1.4.4.4 the precision of this value is in tens of metres
-    if 'lowest_cloud_base' in decoded and decoded['lowest_cloud_base'] is not None:  # noqa
+    if decoded.get('lowest_cloud_base') is not None:
         try:
             output['lowest_cloud_base'] = round(decoded['lowest_cloud_base']['min'], -1)  # noqa
         except Exception:
             output['lowest_cloud_base'] = None
 
     # Visibility is already given in metres
-    if 'visibility' in decoded:
+    if decoded.get('visibility') is not None:
         try:
             output['visibility'] = decoded['visibility']['value']
         except Exception:
@@ -236,7 +236,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     # Cloud cover is given in oktas, which we convert to a percentage
     #  NOTE: By B/C10.4.4.1 this percentage is always rounded up
-    if 'cloud_cover' in decoded:
+    if decoded.get('cloud_cover') is not None:
         try:
             N_oktas = decoded['cloud_cover']['_code']
             # If the cloud cover is 9 oktas, this means the sky was obscured
@@ -250,7 +250,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             output['cloud_cover'] = None
 
     # Wind direction is already in degrees
-    if ('surface_wind' in decoded):
+    if decoded.get('surface_wind') is not None:
         # See B/C1.10.5.3
         # NOTE: Every time period in the following code shall be a negative number,  # noqa
         # to indicate measurements have been taken up until the present.
@@ -283,20 +283,20 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             output['wind_speed'] = None
 
     # Temperatures are given in Celsius, convert to kelvin and round to 2 dp
-    if 'air_temperature' in decoded:
+    if decoded.get('air_temperature') is not None:
         try:
             output['air_temperature'] = round(decoded['air_temperature']['value'] + 273.15, 2)  # noqa
         except Exception:
             output['air_temperature'] = None
 
-    if 'dewpoint_temperature' in decoded:
+    if decoded.get('dewpoint_temperature') is not None:
         try:
             output['dewpoint_temperature'] = round(decoded['dewpoint_temperature']['value'] + 273.15, 2)  # noqa
         except Exception:
             output['dewpoint_temperature'] = None
 
     # RH is already given in %
-    if 'relative_humidity' in decoded:
+    if decoded.get('relative_humidity') is not None:
         try:
             output['relative_humidity'] = decoded['relative_humidity']['value']
         except Exception:
@@ -329,20 +329,20 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     # Pressure is given in hPa, which we convert to Pa. By B/C 1.3.1,
     # pressure has precision in tens of Pa
-    if 'station_pressure' in decoded:
+    if decoded.get('station_pressure') is not None:
         try:
             output['station_pressure'] = round(decoded['station_pressure']['value'] * 100, -1)  # noqa
         except Exception:
             output['station_pressure'] = None
 
     #  Similar to above. By B/C1.3.2, pressure has precision in tens of Pa
-    if 'sea_level_pressure' in decoded:
+    if decoded.get('sea_level_pressure') is not None:
         try:
             output['sea_level_pressure'] = round(decoded['sea_level_pressure']['value'] * 100, -1)  # noqa
         except Exception:
             output['sea_level_pressure'] = None
 
-    if 'geopotential' in decoded:
+    if decoded.get('geopotential') is not None:
         try:
             output['isobaric_surface'] = round(decoded['geopotential']['surface']['value'] * 100, 1)  # noqa
         except Exception:
@@ -352,7 +352,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
         except Exception:
             output['geopotential_height'] = None
 
-    if 'pressure_tendency' in decoded:
+    if decoded.get('pressure_tendency') is not None:
         #  By B/C1.3.3, pressure has precision in tens of Pa
         try:
             output['3hr_pressure_change'] = round(decoded['pressure_tendency']['change']['value'] * 100, -1)  # noqa
@@ -365,7 +365,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             output['pressure_tendency_characteristic'] = None
 
     # Precipitation is given in mm, which is equal to kg/m^2 of rain
-    if 'precipitation_s1' in decoded:
+    if decoded.get('precipitation_s1') is not None:
         # NOTE: When the precipitation measurement RRR has code 990, this
         # represents a trace amount of rain
         # (<0.01 inches), which pymetdecoder records as 0. I (RTB) agree with
@@ -382,13 +382,13 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     # The present and past weather SYNOP codes align with that of BUFR apart
     # from missing values
-    if 'present_weather' in decoded:
+    if decoded.get('present_weather') is not None:
         try:
             output['present_weather'] = decoded['present_weather']['value']
         except Exception:
             output['present_weather'] = None
 
-    if 'past_weather' in decoded:
+    if decoded.get('past_weather') is not None:
         try:
             output['past_weather_1'] = decoded['past_weather']['past_weather_1']['value']  # noqa
         except Exception:
@@ -417,7 +417,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     # We translate these cloud type flags from the SYNOP codes to the
     # BUFR codes
-    if 'cloud_types' in decoded:
+    if decoded.get('cloud_types') is not None:
         try:
             Cl = decoded['cloud_types']['low_cloud_type']['value'] + 30
         except Exception:
@@ -438,7 +438,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
         output['high_cloud_type'] = Ch
 
-        if 'low_cloud_amount' in decoded['cloud_types']:
+        if decoded['cloud_types'].get('low_cloud_amount') is not None:
             # Low cloud amount is given in oktas, and by B/C1.4.4.3.1 it
             # stays that way for BUFR
             try:
@@ -456,7 +456,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
                 output['cloud_vs_s1'] = 7
                 output['cloud_amount_s1'] = N_oktas
 
-        elif 'middle_cloud_amount' in decoded['cloud_types']:
+        elif decoded['cloud_types'].get('middle_cloud_amount') is not None:
             # Middle cloud amount is given in oktas, and by B/C1.4.4.3.1 it
             # stays that way for BUFR
             try:
@@ -512,7 +512,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     #  Group 1 1snTxTxTx - gives maximum temperature over a time period
     # decided by the region
-    if ('maximum_temperature' in decoded and decoded['maximum_temperature'] is not None):  # noqa
+    if decoded.get('maximum_temperature') is not None:
         #  Convert to Kelvin and round to required precision
         try:
             output['maximum_temperature'] = decoded['maximum_temperature']['value']  # noqa
@@ -524,7 +524,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     #  Group 2 2snTnTnTn - gives minimum temperature over a time period
     # decided by the region
-    if ('minimum_temperature' in decoded and decoded['minimum_temperature'] is not None):  # noqa
+    if decoded.get('minimum_temperature') is not None:
         #  Convert to Kelvin and round to required precision
         try:
             output['minimum_temperature'] = decoded['minimum_temperature']['value']  # noqa
@@ -598,7 +598,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     # This regional difference is as follows:
     # It is either omitted, or it takes form 3EsnTgTg, where
     # Tg is the ground temperature
-    if 'ground_state' in decoded:
+    if decoded.get('ground_state') is not None:
         # get value
         if decoded['ground_state']['state'] is not None:
             try:
@@ -617,7 +617,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     #  Group 4 4E'sss - gives state of the ground with snow, and the snow
     # depth (not regional like group 3 is)
-    if 'ground_state_snow' in decoded:
+    if decoded.get('ground_state_snow') is not None:
         if decoded['ground_state_snow']['state'] is not None:
             # We translate the snow depth flags from the SYNOP codes to the
             # BUFR codes
@@ -648,7 +648,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     #  supplementary groups for radiation measurements
 
     # Evaporation 5EEEiE
-    if 'evapotranspiration' in decoded:
+    if decoded.get('evapotranspiration') is not None:
 
         # Evapotranspiration is given in mm, which is equal to kg/m^2 for rain
         try:
@@ -666,7 +666,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             output['evaporation_instrument'] = None
 
     # Temperature change 54g0sndT
-    if 'temperature_change' in decoded:
+    if decoded.get('temperature_change') is not None:
 
         if decoded['temperature_change']['change'] is not None:
             try:
@@ -675,24 +675,25 @@ def parse_synop(message: str, year: int, month: int) -> dict:
                 output['temperature_change'] = None
 
     # Sunshine amount 55SSS (24hrs) and 553SS (1hr)
-    if ('sunshine' in decoded and decoded['sunshine']['amount'] is not None):
+    if (decoded.get('sunshine') is not None):
+        if (decoded['sunshine'].get('amount') is not None):
 
-        # The time period remains in hours
-        try:
-            sun_time = decoded['sunshine']['duration']['value']
-        except Exception:
-            sun_time = None
+            # The time period remains in hours
+            try:
+                sun_time = decoded['sunshine']['duration']['value']
+            except Exception:
+                sun_time = None
 
-        try:
-            # Sunshine amount should be given in minutes
-            sun_amount = decoded['sunshine']['amount']['value'] * 60
-        except Exception:
-            sun_amount = None
+            try:
+                # Sunshine amount should be given in minutes
+                sun_amount = decoded['sunshine']['amount']['value'] * 60
+            except Exception:
+                sun_amount = None
 
-        if sun_time == 1:
-            output['sunshine_amount_1hr'] = sun_amount
-        elif sun_time == 24:
-            output['sunshine_amount_24hr'] = sun_amount
+            if sun_time == 1:
+                output['sunshine_amount_1hr'] = sun_amount
+            elif sun_time == 24:
+                output['sunshine_amount_24hr'] = sun_amount
 
     # Cloud drift data 56DLDMDH
     #  By B/C1.6.2 we must convert the direction to a degree bearing
@@ -704,7 +705,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
         if direction == 8:
             return 0
 
-    if 'cloud_drift_direction' in decoded:
+    if decoded.get('cloud_drift_direction') is not None:
         if decoded['cloud_drift_direction']['low'] is not None:
             try:
                 low_dir = decoded['cloud_drift_direction']['low']['_code']
@@ -741,7 +742,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
                 output['high_cloud_drift_direction'] = None
 
     # Direction and elevation angle of the clouds 57CDaeC
-    if 'cloud_elevation' in decoded:
+    if decoded.get('cloud_elevation') is not None:
         if decoded['cloud_elevation']['genus'] is not None:
             try:
                 output['e_cloud_genus'] = decoded['cloud_elevation']['genus']['_code']  # noqa
@@ -774,7 +775,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     # Positive 58p24p24p24 or negative 59p24p24p24 changes in surface pressure
     # over 24hrs
-    if 'pressure_change' in decoded:
+    if decoded.get('pressure_change') is not None:
         try:
             output['24hr_pressure_change'] = round(decoded['pressure_change']['value']*100, -1)  # noqa
         except Exception:
@@ -794,7 +795,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     # In either case, B/C1.12.2 requires that all radiation measurements
     # are given in J/m^2. We convert this here.
 
-    if 'radiation' in decoded:
+    if decoded.get('radiation') is not None:
         rad_dict = decoded['radiation']
         # Create a function to do the appropriate conversion depending
         # on time period
@@ -943,7 +944,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     #  Group 6 6RRRtR - this is the same group as that in section 1, but over
     # a different time period tR
     #  (which is not a multiple of 6 hours as it is in section 1)
-    if 'precipitation_s3' in decoded:
+    if decoded.get('precipitation_s3') is not None:
         # In SYNOP it is given in mm, and in BUFR it is required to be
         # in kg/m^2 (1mm = 1kg/m^2 for water)
         try:
@@ -959,7 +960,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     #  Group 7 7R24R24R24R24 - this group is the same as group 6, but
     # over a 24 hour time period
-    if 'precipitation_24h' in decoded:
+    if decoded.get('precipitation_24h') is not None:
         # In SYNOP it is given in mm, and in BUFR it is required to be
         # in kg/m^2 (1mm = 1kg/m^2 for water)
         try:
@@ -974,7 +975,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     # Create number of s3 group 8 clouds variable, in case there is no group 8
     num_s3_clouds = 0
 
-    if 'cloud_layer' in decoded:
+    if decoded.get('cloud_layer') is not None:
 
         # Name the array of 8NsChshs groups
         genus_array = decoded['cloud_layer']
@@ -1053,7 +1054,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     #  wind gust speed for region VI (groups 910fmfm and 911fxfx).
     #  These are given and required to be in m/s.
 
-    if ('highest_gust' in decoded):
+    if decoded.get('highest_gust') is not None:
         try:
             output['highest_gust_1'] = decoded['highest_gust']['gust_1']['speed']['value']  # noqa
         except Exception:
@@ -1076,7 +1077,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     # Create number of s4 clouds variable, in case there are no s4 groups
     num_s4_clouds = 0
 
-    if 'section4' in decoded:
+    if decoded.get('section4') is not None:
 
         # Name the array of section 4 items
         genus_array = decoded['section4']

@@ -29,12 +29,41 @@ import os
 import re
 from typing import Iterator
 
+# Now import pymetdecoder and csv2bufr
 from csv2bufr import BUFRMessage
 from pymetdecoder import synop
 
 __version__ = '0.5.1'
 
 LOGGER = logging.getLogger(__name__)
+
+# Global array to store warnings
+warning_msgs = []
+
+# ! Configure the pymetdecoder logger to append warnings to the above array
+
+
+class ArrayHandler(logging.Handler):
+
+    # The emit method will be called every time there is a log
+    def emit(self, record):
+        # If log level is warning, append to the warnings messages array
+        if record.levelname == "WARNING":
+            warning_msgs.append(self.format(record))
+
+
+array_handler = ArrayHandler()
+# Set format to be just the pure warning message with no metadata
+formatter = logging.Formatter('%(message)s')
+array_handler.setFormatter(formatter)
+# Set level to ensure warnings are captured
+array_handler.setLevel(logging.WARNING)
+
+# Grab pymetdecoder logger
+PYMETDECODER_LOGGER = logging.getLogger('pymetdecoder')
+PYMETDECODER_LOGGER.setLevel(logging.WARNING)
+# Use this list handler in the pymetdecoder logger
+PYMETDECODER_LOGGER.addHandler(array_handler)
 
 # status codes
 FAILED = 0
@@ -87,6 +116,7 @@ THISDIR = os.path.dirname(os.path.realpath(__file__))
 MAPPINGS_307080 = f"{THISDIR}{os.sep}resources{os.sep}synop-mappings-307080.json"  # noqa
 MAPPINGS_307096 = f"{THISDIR}{os.sep}resources{os.sep}synop-mappings-307096.json"  # noqa
 
+
 # Load template mappings files, this will be updated for each message.
 with open(MAPPINGS_307080) as fh:
     _mapping_307080 = json.load(fh)
@@ -105,8 +135,10 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     :returns: `dict` of parsed SYNOP message
     """
+    # Make warning messages array global
+    global warning_msgs
 
-    # Get the full output decoded message from the Pymetdecoder package
+    # Get the full output decoded message from the pymetdecoder package
     try:
         decoded = synop.SYNOP().decode(message)
     except Exception as e:
@@ -116,7 +148,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     # Get the template dictionary to be filled
     output = deepcopy(synop_template)
 
-    # SECTIONs 0 AND 1
+    # SECTIONS 0 AND 1
 
     # The following do not need to be converted
     output['report_type'] = message[0:4]
@@ -190,7 +222,6 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             output['station_id'] = None
             output['block_no'] = None
             output['station_no'] = None
-    # ! Removed precipitation indicator as it is redundant
 
     # Get region of report
     if decoded.get('region') is not None:
@@ -958,6 +989,19 @@ def parse_synop(message: str, year: int, month: int) -> dict:
         except Exception:
             output['ps3_time_period'] = None
 
+    # Precipitation indicator iR is needed to determine whether the
+    # section 1 and section 3 precipitation groups are missing because there
+    # is no data, or because there has been 0 precipitation observed
+    if decoded.get('precipitation_indicator') is not None:
+        if decoded['precipitation_indicator'].get('value') is not None:
+
+            iR = decoded['precipitation_indicator']['value']
+
+            # iR = 3 means 0 precipitation observed
+            if iR == 3:
+                output['precipitation_s1'] = 0
+                output['precipitation_s3'] = 0
+
     #  Group 7 7R24R24R24R24 - this group is the same as group 6, but
     # over a 24 hour time period
     if decoded.get('precipitation_24h') is not None:
@@ -1202,9 +1246,11 @@ def transform(data: str, metadata: str, year: int,
 
     :returns: iterator
     """
-    # Array to store warning and error messages
-    warning_msgs = []
+    # Array to store error messages
     error_msgs = []
+
+    # Make warning messages array global
+    global warning_msgs
 
     # ===================
     # First parse metadata file
@@ -1520,6 +1566,10 @@ def transform(data: str, metadata: str, year: int,
 
             # now yield result back to caller
             yield result
+
+            # Reset warning messages array for next iteration
+            print("Warnings array: ", warning_msgs)
+            warning_msgs = []
 
             # Output conversion status to user
             if conversion_success[tsi]:

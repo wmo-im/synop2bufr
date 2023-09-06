@@ -40,7 +40,7 @@ LOGGER = logging.getLogger(__name__)
 # Global array to store warnings
 warning_msgs = []
 
-# ! Configure the pymetdecoder/csv2bufr loggers to append warnings to the above array
+# ! Configure the pymetdecoder/csv2bufr loggers to append warnings to the array
 
 
 class ArrayHandler(logging.Handler):

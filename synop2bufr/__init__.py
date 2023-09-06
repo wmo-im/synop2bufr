@@ -30,8 +30,8 @@ import re
 from typing import Iterator
 
 # Now import pymetdecoder and csv2bufr
-from csv2bufr import BUFRMessage
 from pymetdecoder import synop
+from csv2bufr import BUFRMessage
 
 __version__ = '0.5.1'
 
@@ -40,7 +40,7 @@ LOGGER = logging.getLogger(__name__)
 # Global array to store warnings
 warning_msgs = []
 
-# ! Configure the pymetdecoder logger to append warnings to the above array
+# ! Configure the pymetdecoder/csv2bufr loggers to append warnings to the above array
 
 
 class ArrayHandler(logging.Handler):
@@ -52,6 +52,7 @@ class ArrayHandler(logging.Handler):
             warning_msgs.append(self.format(record))
 
 
+# Create instance of array handler
 array_handler = ArrayHandler()
 # Set format to be just the pure warning message with no metadata
 formatter = logging.Formatter('%(message)s')
@@ -59,15 +60,23 @@ array_handler.setFormatter(formatter)
 # Set level to ensure warnings are captured
 array_handler.setLevel(logging.WARNING)
 
-# Grab pymetdecoder logger
+# Grab pymetdecoder logger and configure
 PYMETDECODER_LOGGER = logging.getLogger('pymetdecoder')
 PYMETDECODER_LOGGER.setLevel(logging.WARNING)
-# Use this list handler in the pymetdecoder logger
+# Use this array handler in the pymetdecoder logger
 PYMETDECODER_LOGGER.addHandler(array_handler)
+
+# Grab csv2bufr logger and configure
+CSV2BUFR_LOGGER = logging.getLogger('csv2bufr')
+CSV2BUFR_LOGGER.setLevel(logging.WARNING)
+# Use this array handler in the csv2bufr logger
+CSV2BUFR_LOGGER.addHandler(array_handler)
 
 # status codes
 FAILED = 0
 PASSED = 1
+
+# ! Initialise the template dictionary and mappings
 
 # Enumerate the keys
 _keys = ['report_type', 'year', 'month', 'day',
@@ -1568,7 +1577,6 @@ def transform(data: str, metadata: str, year: int,
             yield result
 
             # Reset warning messages array for next iteration
-            print("Warnings array: ", warning_msgs)
             warning_msgs = []
 
             # Output conversion status to user

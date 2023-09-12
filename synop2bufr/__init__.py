@@ -33,12 +33,13 @@ from typing import Iterator
 from pymetdecoder import synop
 from csv2bufr import BUFRMessage
 
-__version__ = '0.5.1'
+__version__ = '0.5.dev2'
 
 LOGGER = logging.getLogger(__name__)
 
-# Global array to store warnings
+# Global arrays to store warnings and errors
 warning_msgs = []
+error_msgs = []
 
 # ! Configure the pymetdecoder/csv2bufr loggers to append warnings to the array
 
@@ -1195,9 +1196,6 @@ def extract_individual_synop(data: str) -> list:
 
     # Start position is -1 if AAXX is not present in the message
     if start_position == -1:
-        # LOGGER.error(
-        #     "Invalid SYNOP message: AAXX could not be found."
-        # )
         raise ValueError(
             "Invalid SYNOP message: AAXX could not be found."
         )
@@ -1255,11 +1253,9 @@ def transform(data: str, metadata: str, year: int,
 
     :returns: iterator
     """
-    # Array to store error messages
-    error_msgs = []
-
-    # Make warning messages array global
+    # Make warning and error messages array global
     global warning_msgs
+    global error_msgs
 
     # ===================
     # First parse metadata file
@@ -1286,7 +1282,7 @@ def transform(data: str, metadata: str, year: int,
                 tsi_mapping[tsi] = wsi
             except Exception as e:
                 LOGGER.error(e)
-                error_msgs.append(e)
+                error_msgs.append(str(e))
 
         fh.close()
         # metadata = metadata_dict[wsi]
@@ -1468,7 +1464,7 @@ def transform(data: str, metadata: str, year: int,
                     mapping.update(s4_mappings[i] for i in range(4))
             except Exception:
                 LOGGER.error(f"Missing station height for station {tsi}")
-                warning_msgs.append(
+                error_msgs.append(
                     f"Missing station height for station {tsi}")
 
             # At this point we have a dictionary for the data, a
@@ -1492,6 +1488,7 @@ def transform(data: str, metadata: str, year: int,
             except Exception as e:
                 LOGGER.error(e)
                 LOGGER.error("Error creating BUFRMessage")
+                error_msgs.append(str(e))
                 error_msgs.append("Error creating BUFRMessage")
                 conversion_success[tsi] = False
 
@@ -1503,6 +1500,7 @@ def transform(data: str, metadata: str, year: int,
                 except Exception as e:
                     LOGGER.error(e)
                     LOGGER.error("Error parsing message")
+                    error_msgs.append(str(e))
                     error_msgs.append("Error parsing message")
                     conversion_success[tsi] = False
 
@@ -1538,6 +1536,7 @@ def transform(data: str, metadata: str, year: int,
                     LOGGER.error("Error encoding BUFR, null returned")
                     error_msgs.append("Error encoding BUFR, null returned")
                     LOGGER.error(e)
+                    error_msgs.append(str(e))
                     result["bufr4"] = None
                     status = {
                         "code": FAILED,
@@ -1576,8 +1575,9 @@ def transform(data: str, metadata: str, year: int,
             # now yield result back to caller
             yield result
 
-            # Reset warning messages array for next iteration
+            # Reset warning and error messages array for next iteration
             warning_msgs = []
+            error_msgs = []
 
             # Output conversion status to user
             if conversion_success[tsi]:

@@ -149,9 +149,9 @@ def test_bufr_307080(multiple_reports_307080, metadata_string):
     for item in result:
         msgs[item['_meta']['id']] = item
     # Test the md5 keys
-    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == '603e1c2c25591a8d4213f339a1ce3b52'  # noqa
-    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == '320ad7f1c3f7940a3059ca04dbb6d74a'  # noqa
-    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == '3215ebdc66707c46458d2bbacb49427e'  # noqa
+    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == 'f1595e9f82880b650de227fa007eb770'  # noqa
+    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == '21cd8741f8615cc7b0df70060c3a98ff'  # noqa
+    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == 'f0b736dba245b34985f757b0597e3d54'  # noqa
 
     # Test the bufr template used for all the reports
     # (they should be the same for every report)

@@ -336,6 +336,23 @@ def parse_synop(message: str, year: int, month: int) -> dict:
         except Exception:
             output['dewpoint_temperature'] = None
 
+    # Verify that the dewpoint temperature is less than or equal to
+    # the air temperature
+    if ((output.get('air_temperature') is not None) and
+            (output.get('dewpoint_temperature') is not None)):
+
+        A = output['air_temperature']
+        D = output['dewpoint_temperature']
+
+        # If the dewpoint temperature is higher than the air temperature,
+        # log a warning and set both values to None
+        if A < D:
+            LOGGER.warning(f"Reported dewpoint temperature {D} is greater than the reported air temperature {A}. Elements set to missing")  # noqa
+            warning_msgs.append(f"Reported dewpoint temperature {D} is greater than the reported air temperature {A}. Elements set to missing") # noqa
+
+            output['air_temperature'] = None
+            output['dewpoint_temperature'] = None
+
     # RH is already given in %
     if decoded.get('relative_humidity') is not None:
         try:
@@ -1420,7 +1437,8 @@ def transform(data: str, metadata: str, year: int,
                         ),
                             "value": f"data:vs_s3_{idx+1}"},
                         {"eccodes_key": f"#{idx+3}#cloudAmount",
-                         "value": f"data:cloud_amount_s3_{idx+1}"},
+                         "value": f"data:cloud_amount_s3_{idx+1}",
+                         "valid_min": "const:0", "valid_max": "const:8"},
                         {"eccodes_key": f"#{idx+5}#cloudType",
                          "value": f"data:cloud_genus_s3_{idx+1}"},
                         {"eccodes_key": f"#{idx+2}#heightOfBaseOfCloud",
@@ -1453,7 +1471,8 @@ def transform(data: str, metadata: str, year: int,
                         ),
                             "value": f"const:{vs_s4}"},
                         {"eccodes_key": f"#{idx+num_s3_clouds+3}#cloudAmount",
-                         "value": f"data:cloud_amount_s4_{idx+1}"},
+                         "value": f"data:cloud_amount_s4_{idx+1}",
+                         "valid_min": "const:0", "valid_max": "const:8"},
                         {"eccodes_key": f"#{idx+num_s3_clouds+5}#cloudType",
                          "value": f"data:cloud_genus_s4_{idx+1}"},
                         {"eccodes_key": f"#{idx+1}#heightOfTopOfCloud",

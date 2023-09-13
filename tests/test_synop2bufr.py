@@ -221,7 +221,7 @@ def test_no_time():
 
     with pytest.raises(Exception) as e:
         # Attempt to decode the message
-        parse_synop(missing_time)
+        parse_synop(missing_time, 2000, 1)
         assert str(
             e.value) == ("No SYNOP reports were extracted."
                          " Perhaps the date group YYGGiw"
@@ -236,9 +236,37 @@ def test_no_tsi():
 
     with pytest.raises(Exception) as e:
         # Attempt to decode the message
-        parse_synop(missing_tsi)
+        parse_synop(missing_tsi, 2000, 1)
         assert str(
             e.value) == ("Unexpected precipitation group"
                          " found in section 1, thus unable to"
                          " decode. Section 0 groups may be"
                          " missing.")
+
+
+def test_dewpoint_qc(caplog):
+
+    invalid_dewpoint = """AAXX 21121
+    15015 05515 32931 10103 20111 39765 42250 57020 60071"""
+
+    parse_synop(invalid_dewpoint, 2000, 1)
+
+    # Check that the warning message is correct
+    assert "Reported dewpoint temperature 284.25 is greater than the reported air temperature 283.45. Elements set to missing" in caplog.text  # noqa
+
+
+def test_range_qc(metadata_string):
+
+    out_of_range = """AAXX 21121
+    15015 05515 32980 10610 21810 34765 42250 57020 66001="""
+
+    result = transform(out_of_range, metadata_string, 2000, 1)
+
+    for item in result:
+        warning_msgs = item["warnings"]
+
+    assert "#1#nonCoordinatePressure: Value (47650.0) out of valid range (50000 - 108000).; Element set to missing" in warning_msgs  # noqa
+    assert "#1#airTemperature: Value (334.15) out of valid range (193.15 - 333.15).; Element set to missing" in warning_msgs  # noqa
+    assert "#1#dewpointTemperature: Value (192.15) out of valid range (193.15 - 308.15).; Element set to missing" in warning_msgs  # noqa
+    assert "#1#windSpeed: Value (80.0) out of valid range (0.0 - 75).; Element set to missing" in warning_msgs  # noqa
+    assert "#1#totalPrecipitationOrTotalWaterEquivalent: Value (600.0) out of valid range (0.0 - 500).; Element set to missing" in warning_msgs  # noqa

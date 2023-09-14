@@ -348,7 +348,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
         # log a warning and set both values to None
         if A < D:
             LOGGER.warning(f"Reported dewpoint temperature {D} is greater than the reported air temperature {A}. Elements set to missing")  # noqa
-            warning_msgs.append(f"Reported dewpoint temperature {D} is greater than the reported air temperature {A}. Elements set to missing") # noqa
+            warning_msgs.append(f"Reported dewpoint temperature {D} is greater than the reported air temperature {A}. Elements set to missing")  # noqa
 
             output['air_temperature'] = None
             output['dewpoint_temperature'] = None
@@ -1340,6 +1340,18 @@ def transform(data: str, metadata: str, year: int,
             # check we have data
             if message is None:
                 continue
+
+            # Check data is just a NIL report, if so warn the user and do
+            # not create an empty BUFR file
+            nil_pattern = r"^[A-Za-z]{4} \d{5} (\d{5}) [Nn][Il][Ll]$"
+            match = re.match(nil_pattern, message)
+            if match:
+                LOGGER.warning(
+                    f"NIL report detected for station {match.group(1)}, no BUFR file created.") # noqa
+                warning_msgs.append(
+                    f"NIL report detected for station {match.group(1)}, no BUFR file created.") # noqa
+                continue
+
             # create dictionary to store / return result in
             result = dict()
 
@@ -1444,7 +1456,8 @@ def transform(data: str, metadata: str, year: int,
                         {"eccodes_key": f"#{idx+2}#heightOfBaseOfCloud",
                          "value": f"data:cloud_height_s3_{idx+1}"}
                     ]
-                    mapping.update(s3_mappings[i] for i in range(4))
+                    for m in s3_mappings:
+                        mapping.update(m)
 
                 for idx in range(num_s4_clouds):
                     # Based upon the station height metadata, the
@@ -1480,8 +1493,10 @@ def transform(data: str, metadata: str, year: int,
                         {"eccodes_key": f"#{idx+1}#cloudTopDescription",
                          "value": f"data:cloud_top_s4_{idx+1}"}
                     ]
-                    mapping.update(s4_mappings[i] for i in range(4))
-            except Exception:
+                    for m in s4_mappings:
+                        mapping.update(m)
+            except Exception as e:
+                LOGGER.error(e)
                 LOGGER.error(f"Missing station height for station {tsi}")
                 error_msgs.append(
                     f"Missing station height for station {tsi}")

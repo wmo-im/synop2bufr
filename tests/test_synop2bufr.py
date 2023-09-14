@@ -149,9 +149,9 @@ def test_bufr_307080(multiple_reports_307080, metadata_string):
     for item in result:
         msgs[item['_meta']['id']] = item
     # Test the md5 keys
-    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == '603e1c2c25591a8d4213f339a1ce3b52'  # noqa
-    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == '320ad7f1c3f7940a3059ca04dbb6d74a'  # noqa
-    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == '3215ebdc66707c46458d2bbacb49427e'  # noqa
+    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == 'f1595e9f82880b650de227fa007eb770'  # noqa
+    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == '21cd8741f8615cc7b0df70060c3a98ff'  # noqa
+    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == 'f0b736dba245b34985f757b0597e3d54'  # noqa
 
     # Test the bufr template used for all the reports
     # (they should be the same for every report)
@@ -221,7 +221,7 @@ def test_no_time():
 
     with pytest.raises(Exception) as e:
         # Attempt to decode the message
-        parse_synop(missing_time)
+        parse_synop(missing_time, 2000, 1)
         assert str(
             e.value) == ("No SYNOP reports were extracted."
                          " Perhaps the date group YYGGiw"
@@ -236,9 +236,37 @@ def test_no_tsi():
 
     with pytest.raises(Exception) as e:
         # Attempt to decode the message
-        parse_synop(missing_tsi)
+        parse_synop(missing_tsi, 2000, 1)
         assert str(
             e.value) == ("Unexpected precipitation group"
                          " found in section 1, thus unable to"
                          " decode. Section 0 groups may be"
                          " missing.")
+
+
+def test_dewpoint_qc(caplog):
+
+    invalid_dewpoint = """AAXX 21121
+    15015 05515 32931 10103 20111 39765 42250 57020 60071"""
+
+    parse_synop(invalid_dewpoint, 2000, 1)
+
+    # Check that the warning message is correct
+    assert "Reported dewpoint temperature 284.25 is greater than the reported air temperature 283.45. Elements set to missing" in caplog.text  # noqa
+
+
+def test_range_qc(metadata_string):
+
+    out_of_range = """AAXX 21121
+    15015 05515 32980 10610 21810 34765 42250 57020 66001="""
+
+    result = transform(out_of_range, metadata_string, 2000, 1)
+
+    for item in result:
+        warning_msgs = item["warnings"]
+
+    assert "#1#nonCoordinatePressure: Value (47650.0) out of valid range (50000 - 108000).; Element set to missing" in warning_msgs  # noqa
+    assert "#1#airTemperature: Value (334.15) out of valid range (193.15 - 333.15).; Element set to missing" in warning_msgs  # noqa
+    assert "#1#dewpointTemperature: Value (192.15) out of valid range (193.15 - 308.15).; Element set to missing" in warning_msgs  # noqa
+    assert "#1#windSpeed: Value (80.0) out of valid range (0.0 - 75).; Element set to missing" in warning_msgs  # noqa
+    assert "#1#totalPrecipitationOrTotalWaterEquivalent: Value (600.0) out of valid range (0.0 - 500).; Element set to missing" in warning_msgs  # noqa

@@ -29,16 +29,55 @@ import os
 import re
 from typing import Iterator
 
-from csv2bufr import BUFRMessage
+# Now import pymetdecoder and csv2bufr
 from pymetdecoder import synop
+from csv2bufr import BUFRMessage
 
-__version__ = '0.5.1'
+__version__ = '0.5.dev2'
 
 LOGGER = logging.getLogger(__name__)
+
+# Global arrays to store warnings and errors
+warning_msgs = []
+error_msgs = []
+
+# ! Configure the pymetdecoder/csv2bufr loggers to append warnings to the array
+
+
+class ArrayHandler(logging.Handler):
+
+    # The emit method will be called every time there is a log
+    def emit(self, record):
+        # If log level is warning, append to the warnings messages array
+        if record.levelname == "WARNING":
+            warning_msgs.append(self.format(record))
+
+
+# Create instance of array handler
+array_handler = ArrayHandler()
+# Set format to be just the pure warning message with no metadata
+formatter = logging.Formatter('%(message)s')
+array_handler.setFormatter(formatter)
+# Set level to ensure warnings are captured
+array_handler.setLevel(logging.WARNING)
+
+# Grab pymetdecoder logger and configure
+PYMETDECODER_LOGGER = logging.getLogger('pymetdecoder')
+PYMETDECODER_LOGGER.setLevel(logging.WARNING)
+# Use this array handler in the pymetdecoder logger
+PYMETDECODER_LOGGER.addHandler(array_handler)
+
+# Grab csv2bufr logger and configure
+CSV2BUFR_LOGGER = logging.getLogger('csv2bufr')
+CSV2BUFR_LOGGER.setLevel(logging.WARNING)
+# Use this array handler in the csv2bufr logger
+CSV2BUFR_LOGGER.addHandler(array_handler)
 
 # status codes
 FAILED = 0
 PASSED = 1
+
+# ! Initialise the template dictionary and mappings
 
 # Enumerate the keys
 _keys = ['report_type', 'year', 'month', 'day',
@@ -87,6 +126,7 @@ THISDIR = os.path.dirname(os.path.realpath(__file__))
 MAPPINGS_307080 = f"{THISDIR}{os.sep}resources{os.sep}synop-mappings-307080.json"  # noqa
 MAPPINGS_307096 = f"{THISDIR}{os.sep}resources{os.sep}synop-mappings-307096.json"  # noqa
 
+
 # Load template mappings files, this will be updated for each message.
 with open(MAPPINGS_307080) as fh:
     _mapping_307080 = json.load(fh)
@@ -105,8 +145,10 @@ def parse_synop(message: str, year: int, month: int) -> dict:
 
     :returns: `dict` of parsed SYNOP message
     """
+    # Make warning messages array global
+    global warning_msgs
 
-    # Get the full output decoded message from the Pymetdecoder package
+    # Get the full output decoded message from the pymetdecoder package
     try:
         decoded = synop.SYNOP().decode(message)
     except Exception as e:
@@ -116,7 +158,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
     # Get the template dictionary to be filled
     output = deepcopy(synop_template)
 
-    # SECTIONs 0 AND 1
+    # SECTIONS 0 AND 1
 
     # The following do not need to be converted
     output['report_type'] = message[0:4]
@@ -190,7 +232,6 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             output['station_id'] = None
             output['block_no'] = None
             output['station_no'] = None
-    # ! Removed precipitation indicator as it is redundant
 
     # Get region of report
     if decoded.get('region') is not None:
@@ -293,6 +334,23 @@ def parse_synop(message: str, year: int, month: int) -> dict:
         try:
             output['dewpoint_temperature'] = round(decoded['dewpoint_temperature']['value'] + 273.15, 2)  # noqa
         except Exception:
+            output['dewpoint_temperature'] = None
+
+    # Verify that the dewpoint temperature is less than or equal to
+    # the air temperature
+    if ((output.get('air_temperature') is not None) and
+            (output.get('dewpoint_temperature') is not None)):
+
+        A = output['air_temperature']
+        D = output['dewpoint_temperature']
+
+        # If the dewpoint temperature is higher than the air temperature,
+        # log a warning and set both values to None
+        if A < D:
+            LOGGER.warning(f"Reported dewpoint temperature {D} is greater than the reported air temperature {A}. Elements set to missing")  # noqa
+            warning_msgs.append(f"Reported dewpoint temperature {D} is greater than the reported air temperature {A}. Elements set to missing")  # noqa
+
+            output['air_temperature'] = None
             output['dewpoint_temperature'] = None
 
     # RH is already given in %
@@ -958,6 +1016,19 @@ def parse_synop(message: str, year: int, month: int) -> dict:
         except Exception:
             output['ps3_time_period'] = None
 
+    # Precipitation indicator iR is needed to determine whether the
+    # section 1 and section 3 precipitation groups are missing because there
+    # is no data, or because there has been 0 precipitation observed
+    if decoded.get('precipitation_indicator') is not None:
+        if decoded['precipitation_indicator'].get('value') is not None:
+
+            iR = decoded['precipitation_indicator']['value']
+
+            # iR = 3 means 0 precipitation observed
+            if iR == 3:
+                output['precipitation_s1'] = 0
+                output['precipitation_s3'] = 0
+
     #  Group 7 7R24R24R24R24 - this group is the same as group 6, but
     # over a 24 hour time period
     if decoded.get('precipitation_24h') is not None:
@@ -1142,9 +1213,6 @@ def extract_individual_synop(data: str) -> list:
 
     # Start position is -1 if AAXX is not present in the message
     if start_position == -1:
-        # LOGGER.error(
-        #     "Invalid SYNOP message: AAXX could not be found."
-        # )
         raise ValueError(
             "Invalid SYNOP message: AAXX could not be found."
         )
@@ -1202,9 +1270,9 @@ def transform(data: str, metadata: str, year: int,
 
     :returns: iterator
     """
-    # Array to store warning and error messages
-    warning_msgs = []
-    error_msgs = []
+    # Make warning and error messages array global
+    global warning_msgs
+    global error_msgs
 
     # ===================
     # First parse metadata file
@@ -1231,7 +1299,7 @@ def transform(data: str, metadata: str, year: int,
                 tsi_mapping[tsi] = wsi
             except Exception as e:
                 LOGGER.error(e)
-                error_msgs.append(e)
+                error_msgs.append(str(e))
 
         fh.close()
         # metadata = metadata_dict[wsi]
@@ -1272,6 +1340,18 @@ def transform(data: str, metadata: str, year: int,
             # check we have data
             if message is None:
                 continue
+
+            # Check data is just a NIL report, if so warn the user and do
+            # not create an empty BUFR file
+            nil_pattern = r"^[A-Za-z]{4} \d{5} (\d{5}) [Nn][Il][Ll]$"
+            match = re.match(nil_pattern, message)
+            if match:
+                LOGGER.warning(
+                    f"NIL report detected for station {match.group(1)}, no BUFR file created.") # noqa
+                warning_msgs.append(
+                    f"NIL report detected for station {match.group(1)}, no BUFR file created.") # noqa
+                continue
+
             # create dictionary to store / return result in
             result = dict()
 
@@ -1369,13 +1449,15 @@ def transform(data: str, metadata: str, year: int,
                         ),
                             "value": f"data:vs_s3_{idx+1}"},
                         {"eccodes_key": f"#{idx+3}#cloudAmount",
-                         "value": f"data:cloud_amount_s3_{idx+1}"},
+                         "value": f"data:cloud_amount_s3_{idx+1}",
+                         "valid_min": "const:0", "valid_max": "const:8"},
                         {"eccodes_key": f"#{idx+5}#cloudType",
                          "value": f"data:cloud_genus_s3_{idx+1}"},
                         {"eccodes_key": f"#{idx+2}#heightOfBaseOfCloud",
                          "value": f"data:cloud_height_s3_{idx+1}"}
                     ]
-                    mapping.update(s3_mappings[i] for i in range(4))
+                    for m in s3_mappings:
+                        mapping.update(m)
 
                 for idx in range(num_s4_clouds):
                     # Based upon the station height metadata, the
@@ -1402,7 +1484,8 @@ def transform(data: str, metadata: str, year: int,
                         ),
                             "value": f"const:{vs_s4}"},
                         {"eccodes_key": f"#{idx+num_s3_clouds+3}#cloudAmount",
-                         "value": f"data:cloud_amount_s4_{idx+1}"},
+                         "value": f"data:cloud_amount_s4_{idx+1}",
+                         "valid_min": "const:0", "valid_max": "const:8"},
                         {"eccodes_key": f"#{idx+num_s3_clouds+5}#cloudType",
                          "value": f"data:cloud_genus_s4_{idx+1}"},
                         {"eccodes_key": f"#{idx+1}#heightOfTopOfCloud",
@@ -1410,10 +1493,12 @@ def transform(data: str, metadata: str, year: int,
                         {"eccodes_key": f"#{idx+1}#cloudTopDescription",
                          "value": f"data:cloud_top_s4_{idx+1}"}
                     ]
-                    mapping.update(s4_mappings[i] for i in range(4))
-            except Exception:
+                    for m in s4_mappings:
+                        mapping.update(m)
+            except Exception as e:
+                LOGGER.error(e)
                 LOGGER.error(f"Missing station height for station {tsi}")
-                warning_msgs.append(
+                error_msgs.append(
                     f"Missing station height for station {tsi}")
 
             # At this point we have a dictionary for the data, a
@@ -1437,6 +1522,7 @@ def transform(data: str, metadata: str, year: int,
             except Exception as e:
                 LOGGER.error(e)
                 LOGGER.error("Error creating BUFRMessage")
+                error_msgs.append(str(e))
                 error_msgs.append("Error creating BUFRMessage")
                 conversion_success[tsi] = False
 
@@ -1448,6 +1534,7 @@ def transform(data: str, metadata: str, year: int,
                 except Exception as e:
                     LOGGER.error(e)
                     LOGGER.error("Error parsing message")
+                    error_msgs.append(str(e))
                     error_msgs.append("Error parsing message")
                     conversion_success[tsi] = False
 
@@ -1483,6 +1570,7 @@ def transform(data: str, metadata: str, year: int,
                     LOGGER.error("Error encoding BUFR, null returned")
                     error_msgs.append("Error encoding BUFR, null returned")
                     LOGGER.error(e)
+                    error_msgs.append(str(e))
                     result["bufr4"] = None
                     status = {
                         "code": FAILED,
@@ -1520,6 +1608,10 @@ def transform(data: str, metadata: str, year: int,
 
             # now yield result back to caller
             yield result
+
+            # Reset warning and error messages array for next iteration
+            warning_msgs = []
+            error_msgs = []
 
             # Output conversion status to user
             if conversion_success[tsi]:

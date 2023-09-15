@@ -263,7 +263,7 @@ def test_range_qc(metadata_string):
     result = transform(out_of_range, metadata_string, 2000, 1)
 
     for item in result:
-        warning_msgs = item["warnings"]
+        warning_msgs = item["_meta"]["result"]["warnings"]
 
     assert "#1#nonCoordinatePressure: Value (47650.0) out of valid range (50000 - 108000).; Element set to missing" in warning_msgs  # noqa
     assert "#1#airTemperature: Value (334.15) out of valid range (193.15 - 333.15).; Element set to missing" in warning_msgs  # noqa

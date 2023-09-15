@@ -33,7 +33,7 @@ from typing import Iterator
 from pymetdecoder import synop
 from csv2bufr import BUFRMessage
 
-__version__ = '0.6.dev1'
+__version__ = '0.6.0'
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1332,10 +1332,7 @@ def transform(data: str, metadata: str, year: int,
             yield {
                 "_meta": {
                     "id": None,
-                    "geometry": {
-                        "type": "Point",
-                        "coordinates": None
-                    },
+                    "geometry": None,
                     "properties": {
                         "md5": None,
                         "wigos_station_identifier": None,

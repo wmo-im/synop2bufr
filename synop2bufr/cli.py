@@ -108,39 +108,49 @@ def transform(ctx, synop_file, metadata, output_dir, year, month, verbosity):
         try:
             result = transform_synop(
                 content, metadata.read(), year, month
-                )
+            )
 
         except Exception as e:
             raise click.ClickException(e)
 
         for item in result:
-            # Write the CSV file of decoded data
-            csv_string = item["_meta"]["csv"]
-            timestamp = item["_meta"]["properties"]["datetime"].strftime(
-                '%Y%m%dT%H%M%S'
-            )
 
-            filename = f"decoded_{timestamp}.csv"
+            # Return object may not have a datetime if there is an error
+            # parsing a report
+            if item["_meta"]["properties"].get("datetime") is not None:
+                timestamp = item["_meta"]["properties"]["datetime"].strftime(
+                    '%Y%m%dT%H%M%S'
+                )
+                filename = f"decoded_{timestamp}.csv"
 
-            if header_written:
-                mode = "a"  # Append to file if headers
-            else:
-                mode = "w"  # Write to file if no headers
+                # Write the CSV file of decoded data
+                csv_string = item["_meta"]["csv"]
 
-            with open(filename, mode) as f:
-                if not header_written:
-                    # Write the whole string including headers
-                    f.write(csv_string)
-                    header_written = True
+                if header_written:
+                    mode = "a"  # Append to file if headers
                 else:
-                    # Skip the header row of the string
-                    f.write(csv_string.split("\n")[1])
+                    mode = "w"  # Write to file if no headers
 
-            # Write the BUFR file
-            key = item['_meta']["id"]
-            bufr_filename = f"{output_dir}{os.sep}{key}.bufr4"
-            with open(bufr_filename, "wb") as fh:
-                fh.write(item["bufr4"])
+                with open(filename, mode) as f:
+                    # Check there was no problem writing the report to CSV
+                    if csv_string is not None:
+                        if not header_written:
+                            # Write the whole string including headers
+                            f.write(csv_string)
+                            header_written = True
+                        else:
+                            # Skip the header row of the string
+                            f.write(csv_string.split("\n")[1])
+
+                # Check there was no problem encoding the BUFR message
+                # before writing to a file
+                if item.get("bufr4") is not None:
+                    # Write the BUFR file
+                    key = item['_meta']["id"]
+                    bufr_filename = f"{output_dir}{os.sep}{key}.bufr4"
+
+                    with open(bufr_filename, "wb") as fh:
+                        fh.write(item["bufr4"])
 
     except Exception as e:
         raise click.ClickException(e)

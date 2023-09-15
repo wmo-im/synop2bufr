@@ -1329,7 +1329,30 @@ def transform(data: str, metadata: str, year: int,
             LOGGER.error(e)
             error_msgs.append(str(e))
             messages = []  # Fallback to an empty list if no reports extracted
-            yield {'warnings': warning_msgs, 'errors': error_msgs}
+            yield {
+                "_meta": {
+                    "id": None,
+                    "geometry": None,
+                    "properties": {
+                        "md5": None,
+                        "wigos_station_identifier": None,
+                        "datetime": None,
+                        "originating_centre": None,
+                        "data_category": None
+                    },
+                    "result": {
+                        "code": FAILED,
+                        "message": "Error encoding, BUFR set to None",
+                        "warnings": warning_msgs,
+                        "errors": error_msgs
+                    },
+                    "template": None,
+                    "csv": None
+                }
+            }
+            # Reset warning and error messages array for next iteration
+            warning_msgs = []
+            error_msgs = []
 
         # Count how many conversions were successful using a dictionary
         conversion_success = {}
@@ -1347,9 +1370,9 @@ def transform(data: str, metadata: str, year: int,
             match = re.match(nil_pattern, message)
             if match:
                 LOGGER.warning(
-                    f"NIL report detected for station {match.group(1)}, no BUFR file created.") # noqa
+                    f"NIL report detected for station {match.group(1)}, no BUFR file created.")  # noqa
                 warning_msgs.append(
-                    f"NIL report detected for station {match.group(1)}, no BUFR file created.") # noqa
+                    f"NIL report detected for station {match.group(1)}, no BUFR file created.")  # noqa
                 continue
 
             # create dictionary to store / return result in
@@ -1366,7 +1389,30 @@ def transform(data: str, metadata: str, year: int,
                 LOGGER.error(
                     f"Error parsing SYNOP report: {message}. {str(e)}!")
                 error_msgs.append(f"Error parsing SYNOP report: {message}. {str(e)}!")  # noqa
-                yield {'warnings': warning_msgs, 'errors': error_msgs}
+                yield {
+                    "_meta": {
+                        "id": None,
+                        "geometry": None,
+                        "properties": {
+                            "md5": None,
+                            "wigos_station_identifier": None,
+                            "datetime": None,
+                            "originating_centre": None,
+                            "data_category": None
+                        },
+                        "result": {
+                            "code": FAILED,
+                            "message": "Error encoding, BUFR set to None",
+                            "warnings": warning_msgs,
+                            "errors": error_msgs
+                        },
+                        "template": None,
+                        "csv": None
+                    }
+                }
+                # Reset warning and error messages array for next iteration
+                warning_msgs = []
+                error_msgs = []
                 continue
 
             # Now determine and load the appropriate mappings
@@ -1540,8 +1586,8 @@ def transform(data: str, metadata: str, year: int,
 
             # Only convert to BUFR if there's no errors so far
             if conversion_success[tsi]:
-                # now identifier based on WSI and observation
-                # date as identifier
+
+                # Use WSI and observation date as identifier
                 isodate = message.get_datetime().strftime('%Y%m%dT%H%M%S')
 
                 # Write message to CSV object in memory
@@ -1564,7 +1610,9 @@ def transform(data: str, metadata: str, year: int,
 
                 try:
                     result["bufr4"] = message.as_bufr()  # encode to BUFR
-                    status = {"code": PASSED}
+                    status = {"code": PASSED,
+                              "warnings": warning_msgs,
+                              "errors": error_msgs}
 
                 except Exception as e:
                     LOGGER.error("Error encoding BUFR, null returned")
@@ -1574,7 +1622,9 @@ def transform(data: str, metadata: str, year: int,
                     result["bufr4"] = None
                     status = {
                         "code": FAILED,
-                        "message": "Error encoding, BUFR set to None"
+                        "message": "Error encoding, BUFR set to None",
+                        "warnings": warning_msgs,
+                        "errors": error_msgs
                     }
                     conversion_success[tsi] = False
 
@@ -1602,9 +1652,6 @@ def transform(data: str, metadata: str, year: int,
                     "template": bufr_template,
                     "csv": csv_string
                 }
-
-            result["warnings"] = warning_msgs
-            result["errors"] = error_msgs
 
             # now yield result back to caller
             yield result

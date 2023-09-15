@@ -1413,6 +1413,10 @@ def transform(data: str, metadata: str, year: int,
                         "csv": None
                     }
                 }
+                # Reset warning and error messages array for next iteration
+                warning_msgs = []
+                error_msgs = []
+                continue
 
             # Now determine and load the appropriate mappings
             # file depending on the value of the wind indicator.

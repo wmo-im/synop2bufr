@@ -1520,7 +1520,8 @@ def transform(data: str, metadata: str, year: int,
                                 "value": f"data:vs_s3_{idx+1}"},
                             {"eccodes_key": f"#{idx+3}#cloudAmount",
                                 "value": f"data:cloud_amount_s3_{idx+1}",
-                                "valid_min": "const:0", "valid_max": "const:8"},
+                                "valid_min": "const:0",
+                                "valid_max": "const:8"},
                             {"eccodes_key": f"#{idx+5}#cloudType",
                                 "value": f"data:cloud_genus_s3_{idx+1}"},
                             {"eccodes_key": f"#{idx+2}#heightOfBaseOfCloud",
@@ -1553,14 +1554,19 @@ def transform(data: str, metadata: str, year: int,
                                 "#verticalSignificanceSurfaceObservations"
                             ),
                                 "value": f"const:{vs_s4}"},
-                            {"eccodes_key": f"#{idx+num_s3_clouds+3}#cloudAmount",
+                            {"eccodes_key":
+                                f"#{idx+num_s3_clouds+3}#cloudAmount",
                                 "value": f"data:cloud_amount_s4_{idx+1}",
-                                "valid_min": "const:0", "valid_max": "const:8"},
-                            {"eccodes_key": f"#{idx+num_s3_clouds+5}#cloudType",
+                                "valid_min": "const:0",
+                                "valid_max": "const:8"},
+                            {"eccodes_key":
+                                f"#{idx+num_s3_clouds+5}#cloudType",
                                 "value": f"data:cloud_genus_s4_{idx+1}"},
-                            {"eccodes_key": f"#{idx+1}#heightOfTopOfCloud",
+                            {"eccodes_key":
+                                f"#{idx+1}#heightOfTopOfCloud",
                                 "value": f"data:cloud_height_s4_{idx+1}"},
-                            {"eccodes_key": f"#{idx+1}#cloudTopDescription",
+                            {"eccodes_key":
+                                f"#{idx+1}#cloudTopDescription",
                                 "value": f"data:cloud_top_s4_{idx+1}"}
                         ]
                         for m in s4_mappings:

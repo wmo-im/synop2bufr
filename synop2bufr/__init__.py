@@ -1438,10 +1438,32 @@ def transform(data: str, metadata: str, year: int,
                 conversion_success[tsi] = False
                 LOGGER.warning(f"Station {tsi} not found in station file")
                 warning_msgs.append(f"Station {tsi} not found in station file")
-                # Set the wsi and station height to None so that they
-                # aren't referenced before assignment
-                wsi = None
-                station_height = None
+                result = {
+                    "_meta": {
+                        "id": None,
+                        "geometry": None,
+                        "properties": {
+                            "md5": None,
+                            "wigos_station_identifier": None,
+                            "datetime": None,
+                            "originating_centre": None,
+                            "data_category": None
+                        },
+                        "result": {
+                            "code": FAILED,
+                            "message": "Error encoding, BUFR set to None",
+                            "warnings": warning_msgs,
+                            "errors": error_msgs
+                        },
+                        "template": None,
+                        "csv": None
+                    }
+                }
+                yield result
+                # Reset warning and error messages array for next iteration
+                warning_msgs = []
+                error_msgs = []
+                continue
 
             # parse WSI to get sections
             try:
@@ -1576,8 +1598,8 @@ def transform(data: str, metadata: str, year: int,
                     error_msgs.append("Error creating BUFRMessage")
                     conversion_success[tsi] = False
 
-            # Parse
             if conversion_success[tsi]:
+                # Parse
                 try:
                     # Parse to BUFRMessage object
                     message.parse(msg, mapping)
@@ -1588,8 +1610,8 @@ def transform(data: str, metadata: str, year: int,
                     error_msgs.append("Error parsing message")
                     conversion_success[tsi] = False
 
-            # Only convert to BUFR if there's no errors so far
             if conversion_success[tsi]:
+                # Convert to BUFR
 
                 # Use WSI and observation date as identifier
                 isodate = message.get_datetime().strftime('%Y%m%dT%H%M%S')

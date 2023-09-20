@@ -1389,7 +1389,7 @@ def transform(data: str, metadata: str, year: int,
                 LOGGER.error(
                     f"Error parsing SYNOP report: {message}. {str(e)}!")
                 error_msgs.append(f"Error parsing SYNOP report: {message}. {str(e)}!")  # noqa
-                yield {
+                result = {
                     "_meta": {
                         "id": None,
                         "geometry": None,
@@ -1410,6 +1410,7 @@ def transform(data: str, metadata: str, year: int,
                         "csv": None
                     }
                 }
+                yield result
                 # Reset warning and error messages array for next iteration
                 warning_msgs = []
                 error_msgs = []
@@ -1437,9 +1438,32 @@ def transform(data: str, metadata: str, year: int,
                 conversion_success[tsi] = False
                 LOGGER.warning(f"Station {tsi} not found in station file")
                 warning_msgs.append(f"Station {tsi} not found in station file")
-                # Set the wsi to None so that it isn't referenced before
-                # assignment
-                wsi = None
+                result = {
+                    "_meta": {
+                        "id": None,
+                        "geometry": None,
+                        "properties": {
+                            "md5": None,
+                            "wigos_station_identifier": None,
+                            "datetime": None,
+                            "originating_centre": None,
+                            "data_category": None
+                        },
+                        "result": {
+                            "code": FAILED,
+                            "message": "Error encoding, BUFR set to None",
+                            "warnings": warning_msgs,
+                            "errors": error_msgs
+                        },
+                        "template": None,
+                        "csv": None
+                    }
+                }
+                yield result
+                # Reset warning and error messages array for next iteration
+                warning_msgs = []
+                error_msgs = []
+                continue
 
             # parse WSI to get sections
             try:
@@ -1475,105 +1499,113 @@ def transform(data: str, metadata: str, year: int,
                         LOGGER.warning(f"Invalid metadata for station {tsi} found in station file, unable to parse")  # noqa
                         warning_msgs.append(f"Invalid metadata for station {tsi} found in station file, unable to parse")  # noqa
 
-            try:
-
-                for idx in range(num_s3_clouds):
-                    # Build the dictionary of mappings for section 3
-                    # group 8NsChshs
-
-                    # NOTE: The following keys have been used
-                    # before so the replicator has to be increased:
-                    # - cloudAmount: used 2 times (Nh, Ns)
-                    # - cloudType: used 4 times (CL, CM, CH, C)
-                    # - heightOfBaseOfCloud: used 1 time (h)
-                    # - verticalSignificance: used 7 times (for N,
-                    # low-high cloud amount, low-high cloud drift)
-                    s3_mappings = [
-                        {"eccodes_key": (
-                            f"#{idx+8}"
-                            "#verticalSignificanceSurfaceObservations"
-                        ),
-                            "value": f"data:vs_s3_{idx+1}"},
-                        {"eccodes_key": f"#{idx+3}#cloudAmount",
-                         "value": f"data:cloud_amount_s3_{idx+1}",
-                         "valid_min": "const:0", "valid_max": "const:8"},
-                        {"eccodes_key": f"#{idx+5}#cloudType",
-                         "value": f"data:cloud_genus_s3_{idx+1}"},
-                        {"eccodes_key": f"#{idx+2}#heightOfBaseOfCloud",
-                         "value": f"data:cloud_height_s3_{idx+1}"}
-                    ]
-                    for m in s3_mappings:
-                        mapping.update(m)
-
-                for idx in range(num_s4_clouds):
-                    # Based upon the station height metadata, the
-                    # value of vertical significance for section 4
-                    # groups can be determined.
-                    # Specifically, by B/C1.5.2.1, clouds with bases
-                    # below but tops above station level have vertical
-                    # significance code 10.
-                    # Clouds with bases and tops below station level
-                    # have vertical significance code 11.
-                    cloud_top_height = msg[f'cloud_height_s4_{idx+1}']
-
-                    if cloud_top_height > int(station_height):
-                        vs_s4 = 10
-                    else:
-                        vs_s4 = 11
-
-                    # NOTE: Some of the ecCodes keys are used in
-                    # the above, so we must add 'num_s3_clouds'
-                    s4_mappings = [
-                        {"eccodes_key": (
-                            f"#{idx+num_s3_clouds+8}"
-                            "#verticalSignificanceSurfaceObservations"
-                        ),
-                            "value": f"const:{vs_s4}"},
-                        {"eccodes_key": f"#{idx+num_s3_clouds+3}#cloudAmount",
-                         "value": f"data:cloud_amount_s4_{idx+1}",
-                         "valid_min": "const:0", "valid_max": "const:8"},
-                        {"eccodes_key": f"#{idx+num_s3_clouds+5}#cloudType",
-                         "value": f"data:cloud_genus_s4_{idx+1}"},
-                        {"eccodes_key": f"#{idx+1}#heightOfTopOfCloud",
-                         "value": f"data:cloud_height_s4_{idx+1}"},
-                        {"eccodes_key": f"#{idx+1}#cloudTopDescription",
-                         "value": f"data:cloud_top_s4_{idx+1}"}
-                    ]
-                    for m in s4_mappings:
-                        mapping.update(m)
-            except Exception as e:
-                LOGGER.error(e)
-                LOGGER.error(f"Missing station height for station {tsi}")
-                error_msgs.append(
-                    f"Missing station height for station {tsi}")
-
-            # At this point we have a dictionary for the data, a
-            # dictionary of the mappings and the metadata
-            # The last step is to convert to BUFR.
-            unexpanded_descriptors = [301150, bufr_template]
-            short_delayed_replications = []
-            # update replications
-            delayed_replications = [max(1, num_s3_clouds),
-                                    max(1, num_s4_clouds)]
-            extended_delayed_replications = []
-            table_version = 37
-            try:
-                # create new BUFR msg
-                message = BUFRMessage(
-                    unexpanded_descriptors,
-                    short_delayed_replications,
-                    delayed_replications,
-                    extended_delayed_replications,
-                    table_version)
-            except Exception as e:
-                LOGGER.error(e)
-                LOGGER.error("Error creating BUFRMessage")
-                error_msgs.append(str(e))
-                error_msgs.append("Error creating BUFRMessage")
-                conversion_success[tsi] = False
-
-            # parse
             if conversion_success[tsi]:
+                try:
+                    for idx in range(num_s3_clouds):
+                        # Build the dictionary of mappings for section 3
+                        # group 8NsChshs
+
+                        # NOTE: The following keys have been used
+                        # before so the replicator has to be increased:
+                        # - cloudAmount: used 2 times (Nh, Ns)
+                        # - cloudType: used 4 times (CL, CM, CH, C)
+                        # - heightOfBaseOfCloud: used 1 time (h)
+                        # - verticalSignificance: used 7 times (for N,
+                        # low-high cloud amount, low-high cloud drift)
+                        s3_mappings = [
+                            {"eccodes_key": (
+                                f"#{idx+8}"
+                                "#verticalSignificanceSurfaceObservations"
+                            ),
+                                "value": f"data:vs_s3_{idx+1}"},
+                            {"eccodes_key": f"#{idx+3}#cloudAmount",
+                                "value": f"data:cloud_amount_s3_{idx+1}",
+                                "valid_min": "const:0",
+                                "valid_max": "const:8"},
+                            {"eccodes_key": f"#{idx+5}#cloudType",
+                                "value": f"data:cloud_genus_s3_{idx+1}"},
+                            {"eccodes_key": f"#{idx+2}#heightOfBaseOfCloud",
+                                "value": f"data:cloud_height_s3_{idx+1}"}
+                        ]
+                        for m in s3_mappings:
+                            mapping.update(m)
+
+                    for idx in range(num_s4_clouds):
+                        # Based upon the station height metadata, the
+                        # value of vertical significance for section 4
+                        # groups can be determined.
+                        # Specifically, by B/C1.5.2.1, clouds with bases
+                        # below but tops above station level have vertical
+                        # significance code 10.
+                        # Clouds with bases and tops below station level
+                        # have vertical significance code 11.
+                        cloud_top_height = msg[f'cloud_height_s4_{idx+1}']
+
+                        if cloud_top_height > int(station_height):
+                            vs_s4 = 10
+                        else:
+                            vs_s4 = 11
+
+                        # NOTE: Some of the ecCodes keys are used in
+                        # the above, so we must add 'num_s3_clouds'
+                        s4_mappings = [
+                            {"eccodes_key": (
+                                f"#{idx+num_s3_clouds+8}"
+                                "#verticalSignificanceSurfaceObservations"
+                            ),
+                                "value": f"const:{vs_s4}"},
+                            {"eccodes_key":
+                                f"#{idx+num_s3_clouds+3}#cloudAmount",
+                                "value": f"data:cloud_amount_s4_{idx+1}",
+                                "valid_min": "const:0",
+                                "valid_max": "const:8"},
+                            {"eccodes_key":
+                                f"#{idx+num_s3_clouds+5}#cloudType",
+                                "value": f"data:cloud_genus_s4_{idx+1}"},
+                            {"eccodes_key":
+                                f"#{idx+1}#heightOfTopOfCloud",
+                                "value": f"data:cloud_height_s4_{idx+1}"},
+                            {"eccodes_key":
+                                f"#{idx+1}#cloudTopDescription",
+                                "value": f"data:cloud_top_s4_{idx+1}"}
+                        ]
+                        for m in s4_mappings:
+                            mapping.update(m)
+                except Exception as e:
+                    LOGGER.error(e)
+                    LOGGER.error(f"Missing station height for station {tsi}")
+                    error_msgs.append(
+                        f"Missing station height for station {tsi}")
+                    conversion_success[tsi] = False
+
+            if conversion_success[tsi]:
+                # At this point we have a dictionary for the data, a
+                # dictionary of the mappings and the metadata
+                # The last step is to convert to BUFR.
+                unexpanded_descriptors = [301150, bufr_template]
+                short_delayed_replications = []
+                # update replications
+                delayed_replications = [max(1, num_s3_clouds),
+                                        max(1, num_s4_clouds)]
+                extended_delayed_replications = []
+                table_version = 37
+                try:
+                    # create new BUFR msg
+                    message = BUFRMessage(
+                        unexpanded_descriptors,
+                        short_delayed_replications,
+                        delayed_replications,
+                        extended_delayed_replications,
+                        table_version)
+                except Exception as e:
+                    LOGGER.error(e)
+                    LOGGER.error("Error creating BUFRMessage")
+                    error_msgs.append(str(e))
+                    error_msgs.append("Error creating BUFRMessage")
+                    conversion_success[tsi] = False
+
+            if conversion_success[tsi]:
+                # Parse
                 try:
                     # Parse to BUFRMessage object
                     message.parse(msg, mapping)
@@ -1584,8 +1616,8 @@ def transform(data: str, metadata: str, year: int,
                     error_msgs.append("Error parsing message")
                     conversion_success[tsi] = False
 
-            # Only convert to BUFR if there's no errors so far
             if conversion_success[tsi]:
+                # Convert to BUFR
 
                 # Use WSI and observation date as identifier
                 isodate = message.get_datetime().strftime('%Y%m%dT%H%M%S')
@@ -1652,8 +1684,32 @@ def transform(data: str, metadata: str, year: int,
                     "template": bufr_template,
                     "csv": csv_string
                 }
+            # If there were errors before conversion to BUFR, yield
+            # an object with the _meta key
+            else:
+                result = {
+                    "_meta": {
+                        "id": None,
+                        "geometry": None,
+                        "properties": {
+                            "md5": None,
+                            "wigos_station_identifier": None,
+                            "datetime": None,
+                            "originating_centre": None,
+                            "data_category": None
+                        },
+                        "result": {
+                            "code": FAILED,
+                            "message": "Error encoding, BUFR set to None",
+                            "warnings": warning_msgs,
+                            "errors": error_msgs
+                        },
+                        "template": None,
+                        "csv": None
+                    }
+                }
 
-            # now yield result back to caller
+            # Now yield result back to caller
             yield result
 
             # Reset warning and error messages array for next iteration

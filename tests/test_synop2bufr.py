@@ -149,9 +149,9 @@ def test_bufr_307080(multiple_reports_307080, metadata_string):
     for item in result:
         msgs[item['_meta']['id']] = item
     # Test the md5 keys
-    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == 'f1595e9f82880b650de227fa007eb770'  # noqa
-    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == '21cd8741f8615cc7b0df70060c3a98ff'  # noqa
-    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == 'f0b736dba245b34985f757b0597e3d54'  # noqa
+    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == 'f5874a7e7da9f6132018690f73017a10'  # noqa
+    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == '230d74d29fba410e38cbb6fae1d6fb3f'  # noqa
+    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == '15cefdcd27eded01db05cd5acf7abe02'  # noqa
 
     # Test the bufr template used for all the reports
     # (they should be the same for every report)
@@ -168,9 +168,9 @@ def test_bufr_307096(multiple_reports_307096, metadata_string):
     for item in result:
         msgs[item['_meta']['id']] = item
     # Test the md5 keys
-    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == '27c990045879acc2eedddb7fdc70db4d'  # noqa
-    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == '9db622c40d53aae4ce4f38a658f36d86'  # noqa
-    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == '89f424b9fc38a6db69c7b195bd71d92f'  # noqa
+    assert msgs['WIGOS_0-20000-0-15015_20220321T120000']['_meta']['properties']['md5'] == '3611e3fd99a441f6b80bfa5bea607fee'  # noqa
+    assert msgs['WIGOS_0-20000-0-15020_20220321T120000']['_meta']['properties']['md5'] == '1948789be15abd74b9312d0be1e179d6'  # noqa
+    assert msgs['WIGOS_0-20000-0-15090_20220321T120000']['_meta']['properties']['md5'] == '19fa379ecf284c6b17f51baa36cfc473'  # noqa
 
     # Test the bufr template used for all the reports
     # (they should be the same for every report)

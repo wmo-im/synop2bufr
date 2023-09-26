@@ -35,7 +35,7 @@
         {"eccodes_key": "#1#heightOfBarometerAboveMeanSeaLevel", "value":"data:_barometer_height", "valid_min": "const:-400.0", "valid_max": "const:12707.1"},
         {"eccodes_key": "#1#blockNumber", "value": "data:block_no", "valid_min": "const:0", "valid_max": "const:127"},
         {"eccodes_key": "#1#stationNumber", "value": "data:station_no", "valid_min": "const:0", "valid_max": "const:1023"},
-        {"eccodes_key": "#1#stationOrSiteName", "value": "data:station_id"},
+        {"eccodes_key": "#1#stationOrSiteName", "value": "data:_station_name"},
         {"eccodes_key": "#1#stationType", "value": "data:WMO_station_type", "valid_min": "const:0", "valid_max": "const:3"},
         {"eccodes_key": "#1#year", "value": "data:year", "valid_min": "const:0", "valid_max": "const:4095"},
         {"eccodes_key": "#1#month", "value": "data:month", "valid_min": "const:0", "valid_max": "const:15"},

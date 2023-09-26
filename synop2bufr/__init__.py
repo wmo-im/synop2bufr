@@ -1471,6 +1471,7 @@ def transform(data: str, metadata: str, year: int,
                 wsi_series, wsi_issuer, wsi_issue_number, wsi_local = wsi.split("-")   # noqa
 
                 # get other required metadata
+                station_name = metadata_dict[wsi]["station_name"]
                 latitude = metadata_dict[wsi]["latitude"]
                 longitude = metadata_dict[wsi]["longitude"]
                 station_height = metadata_dict[wsi]["elevation"]
@@ -1481,6 +1482,7 @@ def transform(data: str, metadata: str, year: int,
                 msg['_wsi_issuer'] = wsi_issuer
                 msg['_wsi_issue_number'] = wsi_issue_number
                 msg['_wsi_local'] = wsi_local
+                msg['_station_name'] = station_name
                 msg['_latitude'] = latitude
                 msg['_longitude'] = longitude
                 msg['_station_height'] = station_height

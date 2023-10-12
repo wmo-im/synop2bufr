@@ -1227,11 +1227,10 @@ def extract_individual_synop(data: str) -> list:
             s0 = d
         else:
             if not d.__contains__("="):
-                LOGGER.error((
+                raise ValueError((
                     "Delimiters (=) are not present in the string,"
                     " thus unable to identify separate SYNOP reports."
-                    ))  # noqa
-                raise ValueError
+                    ))
 
             d = re.sub(r"\n+", " ", d)
             d = re.sub(r"\x03", "", d)

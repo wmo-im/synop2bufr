@@ -1216,7 +1216,7 @@ def extract_individual_synop(data: str) -> list:
         )
 
     # Split the string by AAXX YYGGiw
-    data = re.split('(AAXX\s+[0-9]{5})', data[start_position:])
+    data = re.split(r'(AAXX\s+[0-9]{5})', data[start_position:])
 
     # Check if the beginning of the message, that we're about to throw
     # away (data[0]), also contains AAXX and thus there must be a

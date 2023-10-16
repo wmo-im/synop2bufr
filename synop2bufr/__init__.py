@@ -1206,10 +1206,7 @@ def extract_individual_synop(data: str) -> list:
 
     :returns: `list` of messages
     """
-
-    # Check for abbreviated header line TTAAii etc.
-
-    # Now split based as section 0 of synop, beginning AAXX YYGGi_w
+    # Split string based on section 0 of FM-12, beginning with AAXX
     start_position = data.find("AAXX")
 
     # Start position is -1 if AAXX is not present in the message
@@ -1218,7 +1215,18 @@ def extract_individual_synop(data: str) -> list:
             "Invalid SYNOP message: AAXX could not be found."
         )
 
-    data = re.split('(AAXX [0-9]{5})', data[start_position:])
+    # Split the string by AAXX YYGGiw
+    data = re.split('(AAXX\s+[0-9]{5})', data[start_position:])
+
+    # Check if the beginning of the message, that we're about to throw
+    # away (data[0]), also contains AAXX and thus there must be a
+    # typo present at the AAXX YYGGiw part of the report
+    if data[0].__contains__("AAXX"):
+        raise ValueError((
+            f"The following SYNOP message is invalid: {data[0]}"
+            " Please check again for typos."
+        ))
+
     data = data[1:]  # Drop first null element
     # Iterate over messages processing
     messages = []

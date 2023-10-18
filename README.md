@@ -15,7 +15,7 @@ Dependencies are listed in [requirements.txt](https://github.com/wmo-im/synop2bu
 
 ## Running
 
-To run synop2bufr from a docker container:
+To run synop2bufr from a Docker container:
 
 ```console
 docker build -t synop2bufr:local .

@@ -1,7 +1,7 @@
 # Define custom function directory
 ARG FUNCTION_DIR="/function"
 
-FROM wmoim/dim_eccodes_baseimage:2.31.0
+FROM ghcr.io/wmo-im/dim_eccodes_baseimage:2.31.0
 
 # Include global arg in this stage of the build
 ARG FUNCTION_DIR

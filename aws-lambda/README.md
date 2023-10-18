@@ -2,16 +2,15 @@
 
 ## Overview
 
-AWS Lambda is a service from Amazon that enables publishing
-code which is executed as on demand functions. 
+AWS Lambda is a service from Amazon that enables publishing code which is executed as on demand functions. 
 
 This directory contains the Dockerfile and example lambda function code that will run the synop2bufr-transformation on files received in S3.
 
 ## lambda container
 
-To run synop2bufr on Lambda requires a custom container image.  The Dockerfile in this directory.
+The Dockerfile in this directory will build the container image that can be used to run synop2bufr on Lambda.
 
-# to build docker container
+# build and deploy
 ```bash
 docker build -t synop2bufr-lambda .
 ```

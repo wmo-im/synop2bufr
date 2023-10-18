@@ -13,12 +13,14 @@ The synop2bufr Python module contains both a command line interface and API to c
 
 Dependencies are listed in [requirements.txt](https://github.com/wmo-im/synop2bufr/blob/main/requirements.txt). Dependencies are automatically installed during synop2bufr installation.
 
+## Running
+
+To run synop2bufr from a docker container:
+
 ```console
 docker build -t synop2bufr:local .
 docker run -it -v ${pwd}:/local synop2bufr
 ```
-
-## Running
 
 Example data can be found in `data` directory, with the corresponding reference BUFR4 in `data/bufr`.
 
@@ -28,6 +30,8 @@ To transform SYNOP data file into BUFR:
 mkdir output-data
 synop2bufr data transform --metadata data/station_list.csv --year 2023 --month 03 --output-dir output-data data/A_SMRO01YRBK211200_C_EDZW_20220321120500_12524785.txt
 ```
+
+To run synop2bufr inside a Lambda function on Amazon Web Services, please refer to [aws-lambda/README.md](aws-lambda/README.md) and use this [Dockerfile](aws-lambda/Dockerfile) to build the container image for the Lambda function.
 
 ## Usage Guide
 

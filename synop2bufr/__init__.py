@@ -1511,6 +1511,20 @@ def transform(data: str, metadata: str, year: int,
 
             if conversion_success[tsi]:
                 try:
+                    # Define a new method which handles the updating of
+                    # the mapping file with section 3 and 4 cloud data
+                    def update_data_mapping(mapping: list, update: dict):
+                        match = False
+                        for idx in range(len(mapping)):
+                            if mapping[idx]['eccodes_key'] == update['eccodes_key']: # noqa
+                                match = True
+                                break
+                        if match:
+                            mapping[idx] = update
+                        else:
+                            mapping.append(update)
+                        return mapping
+
                     for idx in range(num_s3_clouds):
                         # Build the dictionary of mappings for section 3
                         # group 8NsChshs
@@ -1523,10 +1537,8 @@ def transform(data: str, metadata: str, year: int,
                         # - verticalSignificance: used 7 times (for N,
                         # low-high cloud amount, low-high cloud drift)
                         s3_mappings = [
-                            {"eccodes_key": (
-                                f"#{idx+8}"
-                                "#verticalSignificanceSurfaceObservations"
-                            ),
+                            {"eccodes_key":
+                                f"#{idx+8}#verticalSignificanceSurfaceObservations", # noqa
                                 "value": f"data:vs_s3_{idx+1}"},
                             {"eccodes_key": f"#{idx+3}#cloudAmount",
                                 "value": f"data:cloud_amount_s3_{idx+1}",
@@ -1538,7 +1550,8 @@ def transform(data: str, metadata: str, year: int,
                                 "value": f"data:cloud_height_s3_{idx+1}"}
                         ]
                         for m in s3_mappings:
-                            mapping.update(m)
+                            mapping['data'] = update_data_mapping(
+                                mapping=mapping['data'], update=m)
 
                     for idx in range(num_s4_clouds):
                         # Based upon the station height metadata, the
@@ -1549,44 +1562,37 @@ def transform(data: str, metadata: str, year: int,
                         # significance code 10.
                         # Clouds with bases and tops below station level
                         # have vertical significance code 11.
+                        cloud_top_height = msg[f'cloud_height_s4_{idx+1}']
 
-                        cloud_top_height = msg.get(f'cloud_height_s4_{idx+1}')
+                        if cloud_top_height > int(station_height):
+                            vs_s4 = 10
+                        else:
+                            vs_s4 = 11
 
-                        # Sometimes in section 4 the cloud height is omitted,
-                        # so we need to check it exists before comparing it to
-                        # the station height below
-                        if cloud_top_height is not None:
-
-                            if cloud_top_height > int(station_height):
-                                vs_s4 = 10
-                            else:
-                                vs_s4 = 11
-
-                            # NOTE: Some of the ecCodes keys are used in
-                            # the above, so we must add 'num_s3_clouds'
-                            s4_mappings = [
-                                {"eccodes_key": (
-                                    f"#{idx+num_s3_clouds+8}"
-                                    "#verticalSignificanceSurfaceObservations"
-                                ),
-                                    "value": f"const:{vs_s4}"},
-                                {"eccodes_key":
-                                    f"#{idx+num_s3_clouds+3}#cloudAmount",
-                                    "value": f"data:cloud_amount_s4_{idx+1}",
-                                    "valid_min": "const:0",
-                                    "valid_max": "const:8"},
-                                {"eccodes_key":
-                                    f"#{idx+num_s3_clouds+5}#cloudType",
-                                    "value": f"data:cloud_genus_s4_{idx+1}"},
-                                {"eccodes_key":
-                                    f"#{idx+1}#heightOfTopOfCloud",
-                                    "value": f"data:cloud_height_s4_{idx+1}"},
-                                {"eccodes_key":
-                                    f"#{idx+1}#cloudTopDescription",
-                                    "value": f"data:cloud_top_s4_{idx+1}"}
-                            ]
-                            for m in s4_mappings:
-                                mapping.update(m)
+                        # NOTE: Some of the ecCodes keys are used in
+                        # the above, so we must add 'num_s3_clouds'
+                        s4_mappings = [
+                            {"eccodes_key":
+                                f"#{idx+num_s3_clouds+8}#verticalSignificanceSurfaceObservations", # noqa
+                                "value": f"const:{vs_s4}"},
+                            {"eccodes_key":
+                                f"#{idx+num_s3_clouds+3}#cloudAmount",
+                                "value": f"data:cloud_amount_s4_{idx+1}",
+                                "valid_min": "const:0",
+                                "valid_max": "const:8"},
+                            {"eccodes_key":
+                                f"#{idx+num_s3_clouds+5}#cloudType",
+                                "value": f"data:cloud_genus_s4_{idx+1}"},
+                            {"eccodes_key":
+                                f"#{idx+1}#heightOfTopOfCloud",
+                                "value": f"data:cloud_height_s4_{idx+1}"},
+                            {"eccodes_key":
+                                f"#{idx+1}#cloudTopDescription",
+                                "value": f"data:cloud_top_s4_{idx+1}"}
+                        ]
+                        for m in s4_mappings:
+                            mapping['data'] = update_data_mapping(
+                                mapping=mapping['data'], update=m)
                 except Exception as e:
                     LOGGER.error(e)
                     LOGGER.error(f"Missing station height for station {tsi}")

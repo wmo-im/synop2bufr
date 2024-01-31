@@ -17,8 +17,9 @@ RUN echo "Acquire::Check-Valid-Until \"false\";\nAcquire::Check-Date \"false\";"
 # Environment variables
 
 ENV LOG_LEVEL=INFO
-ENV ORIGINATING_CENTRE=0
-ENV ORIGINATING_SUBCENTRE=0
+# (Example of originating centre and subcentre codes for the WMO Secretariat, this should be changed for each centre!)
+ENV BUFR_ORIGINATING_CENTRE=0
+ENV BUFR_ORIGINATING_SUBCENTRE=0
 
 # copy the app
 COPY . /build

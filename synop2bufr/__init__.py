@@ -1499,20 +1499,38 @@ def transform(data: str, metadata: str, year: int,
                         LOGGER.warning(f"Invalid metadata for station {tsi} found in station file, unable to parse")  # noqa
                         warning_msgs.append(f"Invalid metadata for station {tsi} found in station file, unable to parse")  # noqa
 
+            # Add information to the mappings
             if conversion_success[tsi]:
+                # First check that the mandatory BUFR header centre
+                # and subcentre codes are present
+                missing_env_vars = []
+
+                if os.environ.get("BUFR_ORIGINATING_CENTRE") is None:
+                    missing_env_vars.append("BUFR_ORIGINATING_CENTRE")
+
+                if os.environ.get("BUFR_ORIGINATING_SUBCENTRE") is None:
+                    missing_env_vars.append("BUFR_ORIGINATING_SUBCENTRE")
+
+                # If either of these environment variables are not set,
+                # we stop the conversion completely here
+                if missing_env_vars:
+                    # Display error messages
+                    for var in missing_env_vars:
+                        LOGGER.error(f"The {var} environment variable is not set, unable to convert message to BUFR") # noqa
+                        error_msgs.append(f"The {var} environment variable is not set, unable to convert message to BUFR") # noqa
+                    conversion_success[tsi] = False
+                    # Exit conversion loop
+                    break
+
                 # Add the BUFR header centre and subcentre to mappings
-                # if the environment variable has been set
-                # If it is not set, the defaults are None
-                if os.environ.get("ORIGINATING_CENTRE") is not None:
-                    mapping["header"].append({
-                        "eccodes_key": "centre",
-                        "value": f"const:{os.environ.get('ORIGINATING_CENTRE')}"  # noqa
-                    })
-                if os.environ.get("ORIGINATING_SUBCENTRE") is not None:
-                    mapping["header"].append({
-                        "eccodes_key": "subCentre",
-                        "value": f"const:{os.environ.get('ORIGINATING_SUBCENTRE')}"  # noqa
-                    })
+                mapping["header"].append({
+                    "eccodes_key": "bufrHeaderCentre",
+                    "value": f"const:{os.environ.get('BUFR_ORIGINATING_CENTRE')}"  # noqa
+                })
+                mapping["header"].append({
+                    "eccodes_key": "bufrHeaderSubCentre",
+                    "value": f"const:{os.environ.get('BUFR_ORIGINATING_SUBCENTRE')}"  # noqa
+                })
 
                 # Now we need to add the mappings for the cloud groups
                 # of section 3 and 4

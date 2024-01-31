@@ -1500,6 +1500,22 @@ def transform(data: str, metadata: str, year: int,
                         warning_msgs.append(f"Invalid metadata for station {tsi} found in station file, unable to parse")  # noqa
 
             if conversion_success[tsi]:
+                # Add the BUFR header centre and subcentre to mappings
+                # if the environment variable has been set
+                # If it is not set, the defaults are None
+                if os.environ.get("ORIGINATING_CENTRE") is not None:
+                    mapping["header"].append({
+                        "eccodes_key": "centre",
+                        "value": f"const:{os.environ.get('ORIGINATING_CENTRE')}"  # noqa
+                    })
+                if os.environ.get("ORIGINATING_SUBCENTRE") is not None:
+                    mapping["header"].append({
+                        "eccodes_key": "subCentre",
+                        "value": f"const:{os.environ.get('ORIGINATING_SUBCENTRE')}"  # noqa
+                    })
+
+                # Now we need to add the mappings for the cloud groups
+                # of section 3 and 4
                 try:
                     for idx in range(num_s3_clouds):
                         # Build the dictionary of mappings for section 3

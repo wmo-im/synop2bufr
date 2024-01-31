@@ -1302,7 +1302,6 @@ def transform(data: str, metadata: str, year: int,
                 error_msgs.append(str(e))
 
         fh.close()
-        # metadata = metadata_dict[wsi]
     else:
         LOGGER.error("Invalid metadata")
         raise ValueError("Invalid metadata")
@@ -1494,8 +1493,7 @@ def transform(data: str, metadata: str, year: int,
                 else:
                     # If station has not been found in the station
                     # list, don't repeat warning unnecessarily
-                    if not (f"Station {tsi} not found in station file"
-                            in warning_msgs):
+                    if f"Station {tsi} not found in station file" not in warning_msgs: # noqa
                         LOGGER.warning(f"Invalid metadata for station {tsi} found in station file, unable to parse")  # noqa
                         warning_msgs.append(f"Invalid metadata for station {tsi} found in station file, unable to parse")  # noqa
 

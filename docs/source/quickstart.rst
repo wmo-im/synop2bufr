@@ -34,7 +34,7 @@ Command line interface (CLI)
 Setting Environment Variables
 -----------------------------
 
-Before running the `synop2bufr data transform` command, you need to set the `BUFR_ORIGINATING_CENTRE` and `BUFR_ORIGINATING_SUBCENTRE` environment variables. These variables are used to specify the originating centre and subcentre of the SYNOP messages. **Without these set, the conversion to BUFR will fail.**
+Before running the `synop2bufr data transform` command, we highly encourage you to set the `BUFR_ORIGINATING_CENTRE` and `BUFR_ORIGINATING_SUBCENTRE` environment variables. These variables are used to specify the originating centre and subcentre of the SYNOP messages. **Without these set, they will default to missing (255).**
 
 It is recommended that you set these environment variables in the Dockerfile, by editing the following lines with your originating centre and subcentre values:
 

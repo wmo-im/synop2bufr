@@ -18,8 +18,8 @@ RUN echo "Acquire::Check-Valid-Until \"false\";\nAcquire::Check-Date \"false\";"
 
 ENV LOG_LEVEL=INFO
 # The following need to changed to the correct values for your centre!
-ENV BUFR_ORIGINATING_CENTRE=123
-ENV BUFR_ORIGINATING_SUBCENTRE=123
+ENV BUFR_ORIGINATING_CENTRE=255
+ENV BUFR_ORIGINATING_SUBCENTRE=255
 
 # copy the app
 COPY . /build

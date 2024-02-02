@@ -8,8 +8,8 @@
     "header":[
         {"eccodes_key": "edition", "value": "const:4"},
         {"eccodes_key": "masterTableNumber", "value": "const:0"},
-        {"eccodes_key": "bufrHeaderCentre", "value": "const:0"},
-        {"eccodes_key": "bufrHeaderSubCentre", "value": "const:0"},
+        {"eccodes_key": "bufrHeaderCentre", "value": "const:65535"},
+        {"eccodes_key": "bufrHeaderSubCentre", "value": "const:65535"},
         {"eccodes_key": "updateSequenceNumber", "value": "const:0"},
         {"eccodes_key": "dataCategory", "value": "const:0"},
         {"eccodes_key": "internationalDataSubCategory", "value": "const:2"},

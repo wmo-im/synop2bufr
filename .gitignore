@@ -42,6 +42,8 @@ nosetests.xml
 logs
 .vscode/
 .vscode/settings.json
+# Ignore decoded CSV files
+decoded_*.csv
 
 # pycharm
 .idea

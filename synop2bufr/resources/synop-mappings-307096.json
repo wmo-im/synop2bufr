@@ -1,4 +1,15 @@
 {
+    "conformsTo": "csv2bufr-template-v2.json",
+    "metadata": {
+        "label": "Surface land stations (manual)",
+        "description": "csv2bufr mapping template for use with synop2bufr and converting FM-12 reports to BUFR, using BUFR sequence 301150, 307096. This mapping is used when the wind variables are measured with an anemometer.",
+        "version": "2",
+        "author": "Rory Burke",
+        "editor": "",
+        "dateCreated": "2023-09-01",
+        "dateModified": "2024-02-05",
+        "id": "f7b5e865-fd82-4e93-bdc3-40b705d73860"
+    },
     "inputShortDelayedDescriptorReplicationFactor": [],
     "inputDelayedDescriptorReplicationFactor": [1,1],
     "inputExtendedDelayedDescriptorReplicationFactor": [],

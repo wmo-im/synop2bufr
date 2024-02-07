@@ -14,9 +14,13 @@ RUN echo "Acquire::Check-Valid-Until \"false\";\nAcquire::Check-Date \"false\";"
     && pip3 install --no-cache-dir https://github.com/wmo-im/csv2bufr/archive/refs/tags/v0.7.4.zip \
     && pip3 install --no-cache-dir https://github.com/wmo-im/pymetdecoder/archive/refs/tags/v0.1.10.zip
 
-ENV LOG_LEVEL=INFO
+# Environment variables
 
-#WORKDIR /build
+ENV LOG_LEVEL=INFO
+# The following need to changed to the correct values for your centre!
+ENV BUFR_ORIGINATING_CENTRE=65535
+ENV BUFR_ORIGINATING_SUBCENTRE=65535
+
 # copy the app
 COPY . /build
 

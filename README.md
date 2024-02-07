@@ -13,6 +13,24 @@ The synop2bufr Python module contains both a command line interface and API to c
 
 Dependencies are listed in [requirements.txt](https://github.com/wmo-im/synop2bufr/blob/main/requirements.txt). Dependencies are automatically installed during synop2bufr installation.
 
+### Setting Environment Variables
+
+Before using synop2bufr, we highly encourage you to set the `BUFR_ORIGINATING_CENTRE` and `BUFR_ORIGINATING_SUBCENTRE` environment variables. These variables are used to specify the originating centre and subcentre of the SYNOP messages. **Without these set, they will default to missing (255).**
+
+It is recommended that you set these environment variables in the Dockerfile, by editing the following lines with your originating centre and subcentre values:
+
+```bash
+ENV BUFR_ORIGINATING_CENTRE=<centre_value>
+ENV BUFR_ORIGINATING_SUBCENTRE=<subcentre_value>
+```
+
+Alternatively, you can set these environment variables in your shell if you want to run synop2bufr on your local machine. Here's how you can do it in a Bash shell:
+
+```bash
+export BUFR_ORIGINATING_CENTRE=<centre_value>
+export BUFR_ORIGINATING_SUBCENTRE=<subcentre_value>
+```
+
 ## Running
 
 To run synop2bufr from a Docker container:
@@ -33,9 +51,9 @@ synop2bufr data transform --metadata data/station_list.csv --year 2023 --month 0
 
 To run synop2bufr inside a Lambda function on Amazon Web Services, please refer to [aws-lambda/README.md](aws-lambda/README.md) and use this [Dockerfile](aws-lambda/Dockerfile) to build the container image for the Lambda function.
 
-## Usage Guide
+## API Usage Guide
 
-Here we detail how synop2bufr can be used.
+Here we detail how the synop2bufr API can be used in Python.
 
 To begin, suppose we have some SYNOP data.
 

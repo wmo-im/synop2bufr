@@ -1014,7 +1014,11 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             # The time period is expected to be in hours
             output['ps3_time_period'] = -1 * decoded['precipitation_s3']['time_before_obs']['value']  # noqa
         except Exception:
-            output['ps3_time_period'] = None
+            # Regional manual (1/12.11, 2/12.12, 3/12.10, etc.) states that
+            # the precipitation time period is 3 hours,
+            # or another period required for regional exchange.
+            # This means that if tR is not given, it is assumed to be 3 hours.
+            output['ps3_time_period'] = -3
 
     # Precipitation indicator iR is needed to determine whether the
     # section 1 and section 3 precipitation groups are missing because there
@@ -1580,13 +1584,13 @@ def transform(data: str, metadata: str, year: int,
                         # - verticalSignificance: used 7 times (for N,
                         # low-high cloud amount, low-high cloud drift)
                         s3_mappings = [
-                            {"eccodes_key":
-                                f"#{idx+8}#verticalSignificanceSurfaceObservations", # noqa
-                                "value": f"data:vs_s3_{idx+1}"},
-                            {"eccodes_key": f"#{idx+3}#cloudAmount",
-                                "value": f"data:cloud_amount_s3_{idx+1}",
-                                "valid_min": "const:0",
-                                "valid_max": "const:8"},
+                            # {"eccodes_key":
+                            #     f"#{idx+8}#verticalSignificanceSurfaceObservations", # noqa
+                            #     "value": f"data:vs_s3_{idx+1}"},
+                            # {"eccodes_key": f"#{idx+3}#cloudAmount",
+                            #     "value": f"data:cloud_amount_s3_{idx+1}",
+                            #     "valid_min": "const:0",
+                            #     "valid_max": "const:8"},
                             {"eccodes_key": f"#{idx+5}#cloudType",
                                 "value": f"data:cloud_genus_s3_{idx+1}"},
                             {"eccodes_key": f"#{idx+2}#heightOfBaseOfCloud",
@@ -1615,14 +1619,14 @@ def transform(data: str, metadata: str, year: int,
                         # NOTE: Some of the ecCodes keys are used in
                         # the above, so we must add 'num_s3_clouds'
                         s4_mappings = [
-                            {"eccodes_key":
-                                f"#{idx+num_s3_clouds+8}#verticalSignificanceSurfaceObservations", # noqa
-                                "value": f"const:{vs_s4}"},
-                            {"eccodes_key":
-                                f"#{idx+num_s3_clouds+3}#cloudAmount",
-                                "value": f"data:cloud_amount_s4_{idx+1}",
-                                "valid_min": "const:0",
-                                "valid_max": "const:8"},
+                            # {"eccodes_key":
+                            #     f"#{idx+num_s3_clouds+8}#verticalSignificanceSurfaceObservations", # noqa
+                            #     "value": f"const:{vs_s4}"},
+                            # {"eccodes_key":
+                            #     f"#{idx+num_s3_clouds+3}#cloudAmount",
+                            #     "value": f"data:cloud_amount_s4_{idx+1}",
+                            #     "valid_min": "const:0",
+                            #     "valid_max": "const:8"},
                             {"eccodes_key":
                                 f"#{idx+num_s3_clouds+5}#cloudType",
                                 "value": f"data:cloud_genus_s4_{idx+1}"},
@@ -1636,6 +1640,11 @@ def transform(data: str, metadata: str, year: int,
                         for m in s4_mappings:
                             mapping['data'] = update_data_mapping(
                                 mapping=mapping['data'], update=m)
+                    # Now section 3 and 4 cloud groups have been
+                    # added to the mapping file, write the file
+                    # for debugging purposes
+                    with open('updated_mappings.json', 'w') as f:
+                        json.dump(mapping, f, indent=2)
                 except Exception as e:
                     LOGGER.error(e)
                     LOGGER.error(f"Missing station height for station {tsi}")

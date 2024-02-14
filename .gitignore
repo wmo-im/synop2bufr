@@ -44,6 +44,8 @@ logs
 .vscode/settings.json
 # Ignore decoded CSV files
 decoded_*.csv
+# Ignore bash scripts in data folder
+data/*.sh
 
 # pycharm
 .idea

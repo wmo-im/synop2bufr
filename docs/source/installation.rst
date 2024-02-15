@@ -45,21 +45,20 @@ Alternatively, synop2bufr can be installed from source. First clone the reposito
    git clone https://github.com/wmo-im/synop2bufr.git
    cd synop2bufr
 
-If running in a Docker environment, build the Docker image and run the container:
+You can then run synop2bufr from an ecCodes base image as follows:
 
 .. code-block:: bash
 
-   docker build -t synop2bufr .
-   docker run -it -v ${pwd}:/app synop2bufr
-   cd /app
+   docker run -it -v ${pwd}:/local wmoim/dim_eccodes_baseimage:2.34.0 bash
+   apt-get update && apt-get install -y git
+   cd /local
+   python3 setup.py install
+   synop2bufr --help
 
 The above step can be skipped if not using Docker. If not using Docker the module and dependencies needs to be installed:
 
 .. code-block:: bash
-
-   pip3 install -r requirements.txt
-   pip3 install --no-cache-dir https://github.com/wmo-im/csv2bufr/archive/refs/tags/v0.3.1.zip
-   pip3 install --no-cache-dir https://github.com/wmo-im/pymetdecoder/archive/refs/tags/v0.1.0.zip
+   
    python3 setup.py install
    synop2bufr --help
 

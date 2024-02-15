@@ -17,14 +17,7 @@ Dependencies are listed in [requirements.txt](https://github.com/wmo-im/synop2bu
 
 Before using synop2bufr, we highly encourage you to set the `BUFR_ORIGINATING_CENTRE` and `BUFR_ORIGINATING_SUBCENTRE` environment variables. These variables are used to specify the originating centre and subcentre of the SYNOP messages. **Without these set, they will default to missing (255).**
 
-It is recommended that you set these environment variables in the Dockerfile, by editing the following lines with your originating centre and subcentre values:
-
-```bash
-ENV BUFR_ORIGINATING_CENTRE=<centre_value>
-ENV BUFR_ORIGINATING_SUBCENTRE=<subcentre_value>
-```
-
-Alternatively, you can set these environment variables in your shell if you want to run synop2bufr on your local machine. Here's how you can do it in a Bash shell:
+You can set these environment variables in your shell if you want to run synop2bufr on your local machine. Here's how you can do it in a Bash shell:
 
 ```bash
 export BUFR_ORIGINATING_CENTRE=<centre_value>
@@ -36,8 +29,11 @@ export BUFR_ORIGINATING_SUBCENTRE=<subcentre_value>
 To run synop2bufr from a Docker container:
 
 ```console
-docker build -t synop2bufr:local .
-docker run -it -v ${pwd}:/local synop2bufr
+docker run -it -v ${pwd}:/local wmoim/dim_eccodes_baseimage:2.34.0 bash
+apt-get update && apt-get install -y git
+cd /local
+python3 setup.py install
+synop2bufr --help
 ```
 
 Example data can be found in `data` directory, with the corresponding reference BUFR4 in `data/bufr`.

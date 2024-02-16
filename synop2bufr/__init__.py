@@ -1571,18 +1571,6 @@ def transform(data: str, metadata: str, year: int,
                             mapping.append(update)
                         return mapping
 
-                    # Add delayed descriptor replication factor (0 31 001)
-                    # to represent the number of section 3 cloud groups
-                    if num_s3_clouds > 0:
-                        s3_delayed_replication = {
-                            "eccodes_key":
-                                "#1#delayedDescriptorReplicationFactor",
-                            "value": f"const:{num_s3_clouds}"
-                        }
-                        mapping['data'] = update_data_mapping(
-                            mapping=mapping['data'],
-                            update=s3_delayed_replication)
-
                     # Now add the rest of the mappings for section 3 clouds
                     for idx in range(num_s3_clouds):
                         # Build the dictionary of mappings for section 3
@@ -1597,9 +1585,9 @@ def transform(data: str, metadata: str, year: int,
                         # low-high cloud amount, low-high cloud drift)
                         s3_mappings = [
                             {"eccodes_key":
-                                f"#{idx+8}#verticalSignificanceSurfaceObservations",  # noqa
+                                f"#{idx+6}#verticalSignificanceSurfaceObservations",  # noqa
                                 "value": f"data:vs_s3_{idx+1}"},
-                            {"eccodes_key": f"#{idx+3}#cloudAmount",
+                            {"eccodes_key": f"#{idx+2}#cloudAmount",
                                 "value": f"data:cloud_amount_s3_{idx+1}",
                                 "valid_min": "const:0",
                                 "valid_max": "const:8"},
@@ -1611,18 +1599,6 @@ def transform(data: str, metadata: str, year: int,
                         for m in s3_mappings:
                             mapping['data'] = update_data_mapping(
                                 mapping=mapping['data'], update=m)
-
-                    # Add delayed descriptor replication factor (0 31 001)
-                    # to represent the number of section 4 cloud groups
-                    if num_s4_clouds > 0:
-                        s4_delayed_replication = {
-                            "eccodes_key":
-                                "#2#delayedDescriptorReplicationFactor",
-                            "value": f"const:{num_s4_clouds}"
-                        }
-                        mapping['data'] = update_data_mapping(
-                            mapping=mapping['data'],
-                            update=s4_delayed_replication)
 
                     # Now add the rest of the mappings for section 4 clouds
                     for idx in range(num_s4_clouds):
@@ -1645,10 +1621,10 @@ def transform(data: str, metadata: str, year: int,
                         # the above, so we must add 'num_s3_clouds'
                         s4_mappings = [
                             {"eccodes_key":
-                                f"#{idx+num_s3_clouds+8}#verticalSignificanceSurfaceObservations",  # noqa
+                                f"#{idx+num_s3_clouds+6}#verticalSignificanceSurfaceObservations",  # noqa
                                 "value": f"const:{vs_s4}"},
                             {"eccodes_key":
-                                f"#{idx+num_s3_clouds+3}#cloudAmount",
+                                f"#{idx+num_s3_clouds+2}#cloudAmount",
                                 "value": f"data:cloud_amount_s4_{idx+1}",
                                 "valid_min": "const:0",
                                 "valid_max": "const:8"},
@@ -1671,11 +1647,6 @@ def transform(data: str, metadata: str, year: int,
                     error_msgs.append(
                         f"Missing station height for station {tsi}")
                     conversion_success[tsi] = False
-            # Now section 3 and 4 cloud groups have been
-            # added to the mapping file, write the file
-            # for debugging purposes
-            with open('updated_mappings.json', 'w') as f:
-                json.dump(mapping, f, indent=2)
 
             if conversion_success[tsi]:
                 # At this point we have a dictionary for the data, a
@@ -1684,8 +1655,7 @@ def transform(data: str, metadata: str, year: int,
                 unexpanded_descriptors = [301150, bufr_template]
                 short_delayed_replications = []
                 # update replications
-                delayed_replications = [max(1, num_s3_clouds),
-                                        max(1, num_s4_clouds)]
+                delayed_replications = [num_s3_clouds, num_s4_clouds]
                 extended_delayed_replications = []
                 table_version = 37
                 try:

@@ -49,7 +49,7 @@ You can then run synop2bufr from an ecCodes base image as follows:
 
 .. code-block:: bash
 
-   docker run -it -v ${pwd}:/local wmoim/dim_eccodes_baseimage:2.34.0 bash
+   docker run -it -v /$(pwd):/local wmoim/dim_eccodes_baseimage:2.34.0 bash
    apt-get update && apt-get install -y git
    cd /local
    python3 setup.py install

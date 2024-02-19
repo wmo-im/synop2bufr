@@ -75,7 +75,7 @@ if (os.path.exists('MANIFEST')):
     os.unlink('MANIFEST')
 
 # Install dependencies not on PyPI
-subprocess.check_call("pip install 'csv2bufr @ git+https://github.com/wmo-im/csv2bufr.git@v0.8.1'", shell=True)
+subprocess.check_call("pip install 'csv2bufr @ git+https://github.com/wmo-im/csv2bufr.git@v0.8.1'", shell=True) # noqa
 
 setup(
     name='synop2bufr',

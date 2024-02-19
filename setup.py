@@ -75,7 +75,6 @@ if (os.path.exists('MANIFEST')):
     os.unlink('MANIFEST')
 
 # Install dependencies not on PyPI
-subprocess.check_call("pip install 'pymetdecoder @ git+https://github.com/wmo-im/pymetdecoder.git@v0.1.11'", shell=True)
 subprocess.check_call("pip install 'csv2bufr @ git+https://github.com/wmo-im/csv2bufr.git@v0.8.1'", shell=True)
 
 setup(

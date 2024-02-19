@@ -1,3 +1,3 @@
 click
-pymetdecoder @ git+https://github.com/wmo-im/pymetdecoder.git@v0.1.11
+pymetdecoder-wmo
 csv2bufr @ git+https://github.com/wmo-im/csv2bufr.git@v0.8.1

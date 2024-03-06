@@ -1554,22 +1554,23 @@ def transform(data: str, metadata: str, year: int,
                     # Stop duplicated warnings
                     can_var_warning_be_displayed = False
 
-                # Now we need to add the mappings for the cloud groups
+                # Define a new method which handles the updating of
+                # the mapping file with section 3 and 4 cloud data
+                def update_data_mapping(mapping: list, update: dict):
+                    match = False
+                    for idx in range(len(mapping)):
+                        if mapping[idx]['eccodes_key'] == update['eccodes_key']:  # noqa
+                            match = True
+                            break
+                    if match:
+                        mapping[idx] = update
+                    else:
+                        mapping.append(update)
+                    return mapping
+
+                # Now we add the mappings for the cloud groups
                 # of section 3 and 4
                 try:
-                    # Define a new method which handles the updating of
-                    # the mapping file with section 3 and 4 cloud data
-                    def update_data_mapping(mapping: list, update: dict):
-                        match = False
-                        for idx in range(len(mapping)):
-                            if mapping[idx]['eccodes_key'] == update['eccodes_key']:  # noqa
-                                match = True
-                                break
-                        if match:
-                            mapping[idx] = update
-                        else:
-                            mapping.append(update)
-                        return mapping
 
                     # Now add the rest of the mappings for section 3 clouds
                     for idx in range(num_s3_clouds):

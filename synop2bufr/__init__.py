@@ -1225,7 +1225,7 @@ def extract_individual_synop(data: str) -> list:
     # that we're about to throw away (data[0]) also contains AAXX.
     # If this is true, there must be a typo present at the AAXX YYGGiw
     # part and thus we can't process the message.
-    if data[0].__contains__("AAXX"):
+    if "AAXX" in data[0]:
         raise ValueError((
             f"The following SYNOP message is invalid: {data[0]}"
             " Please check again for typos."
@@ -1238,7 +1238,7 @@ def extract_individual_synop(data: str) -> list:
         if "AAXX" in d:
             s0 = d
         else:
-            if not d.__contains__("="):
+            if "=" not in d:
                 raise ValueError((
                     "Delimiters (=) are not present in the string,"
                     " thus unable to identify separate SYNOP reports."

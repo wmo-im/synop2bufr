@@ -1221,9 +1221,10 @@ def extract_individual_synop(data: str) -> list:
     # Split the string by AAXX YYGGiw
     data = re.split(r'(AAXX\s+[0-9]{5})', data[start_position:])
 
-    # Check if the beginning of the message, that we're about to throw
-    # away (data[0]), also contains AAXX and thus there must be a
-    # typo present at the AAXX YYGGiw part of the report
+    # Check if the beginning of the message (e.g. ZCZC 123 etc.)
+    # that we're about to throw away (data[0]) also contains AAXX.
+    # If this is true, there must be a typo present at the AAXX YYGGiw
+    # part and thus we can't process the message.
     if data[0].__contains__("AAXX"):
         raise ValueError((
             f"The following SYNOP message is invalid: {data[0]}"

@@ -133,6 +133,401 @@ with open(MAPPINGS_307080) as fh:
 with open(MAPPINGS_307096) as fh:
     _mapping_307096 = json.load(fh)
 
+# Parse section 0
+
+
+def parse_sections_0_and_1(decoded: dict, output: dict) -> dict:
+    """This function uses pymetdecoder's decoding to parse
+    sections 0 and 1 of the SYNOP report, updating and
+    returning the 'output' dictionary.
+    This is done using closures for each variable decoding.
+
+    Args:
+        decoded (dict): The dictionary returned by
+        the pymetdecoder module, which contains the
+        decoded SYNOP report but is yet to adhere to
+        the B/C1 regulations.
+        output (dict): The dictionary to be filled with
+        the parsed SYNOP report, adhering to the B/C1
+        regulations.
+
+    Returns:
+        dict: The partially filled 'output' dictionary.
+    """
+    def parse_time() -> None:
+        output['day'] = decoded.get('obs_time', {}).get('day', {}).get('value')  # noqa
+        output['hour'] = decoded.get('obs_time', {}).get('hour', {}).get('value')  # noqa
+
+        # The minute will be 00 unless specified by exact
+        # observation time (group 9)
+        if decoded.get('exact_obs_time') is None:
+            output['minute'] = 0
+            return
+
+        output['minute'] = decoded['exact_obs_time'].get('minute', {}).get('value')  # noqa
+        # Overwrite the hour, because the actual observation
+        # may be from the hour before but has been rounded in
+        # the YYGGiw group
+        output['hour'] = decoded['exact_obs_time'].get('hour', {}).get('value')  # noqa
+
+    def choose_bits_and_template() -> dict:
+        """
+        This finds the wind indicator bit values and mapping
+        template to use for the conversion to BUFR, based
+        upon the wind indicator flag of the message.
+        The logic for choosing the template is as follows:
+        - If the wind is measured using an anemometer, use
+        template 307096.
+        - If the wind is estimated, use the template 307080
+        which allows us to directly encode the wind indicator.
+
+        Returns:
+            dict: The bit value and mapping template for each
+            wind indicator flag.
+        """
+        return {
+            0: {"iw_translated": 0b0000, "template": 307080},
+            1: {"iw_translated": 0b1000, "template": 307096},
+            3: {"iw_translated": 0b0100, "template": 307080},
+            4: {"iw_translated": 0b1100, "template": 307096},
+        }
+
+    def parse_wind() -> None:
+        wind_indicator_mapping = choose_bits_and_template()
+
+        # Get the wind indicator flag
+        iw = decoded.get('wind_indicator', {}).get('value')
+
+        # Default template must be 307080
+        default_bit_and_template = {"iw_translated": None, "template": 307080}
+
+        # Use the mapping to find the corresponding bit value
+        # and template, if not possible use the default
+        bit_and_template = wind_indicator_mapping.get(iw, default_bit_and_template)  # noqa
+
+        output['wind_indicator'] = bit_and_template["iw_translated"]
+        output['template'] = bit_and_template["template"]
+
+        # Now obtain the wind direction and speed
+        if decoded.get('surface_wind') is None:
+            return
+
+        # See B/C1.10.5.3
+        # NOTE: Every time period in the following code shall
+        # be a negative number to indicate measurements have
+        # been taken up until the present.
+        output['wind_time_period'] = -10
+
+        output['wind_direction'] = decoded['surface_wind'].get('direction', {}).get('value')  # noqa
+
+        def speed_converter(speed: float, unit: str) -> float:
+            """
+            Converts the wind speed to m/s if the unit is knots.
+            """
+            return speed * 0.51444 if unit == 'KT' else speed
+
+        # Wind speed in units specified by 'wind_indicator'
+        ff_unit = decoded['wind_indicator'].get('unit')
+        ff = decoded['surface_wind'].get('speed', {}).get('value')
+        if ff is not None:
+            output['wind_speed'] = speed_converter(ff, ff_unit)
+
+    def parse_station_info() -> None:
+        output['station_id'] = decoded.get('station_id', {}).get('value')
+        output['block_no'] = output['station_id'][:2]
+        output['station_no'] = output['station_id'][2:5]
+        output['region'] = decoded.get('region', {}).get('value', None)
+
+    def parse_station_type() -> None:
+        """
+        We translate this station type flag from the SYNOP
+        code to the BUFR code.
+        """
+        ix = decoded.get('weather_indicator', {}).get('value')
+
+        if ix is None:
+            return
+
+        if ix <= 3:
+            ix_translated = 1  # Manned station
+        elif ix == 4:
+            ix_translated = 2  # Hybrid station
+        elif ix > 4 and ix <= 7:
+            ix_translated = 0  # Automatic station
+
+        output['WMO_station_type'] = ix_translated
+
+    def parse_clouds() -> None:
+        """
+        Obtains the lowest cloud base, visibility, and cloud
+        cover from the decoded SYNOP report.
+        """
+        # Lowest cloud base is already given in metres,
+        # and we specifically select the minimum value
+        min_base = decoded.get('lowest_cloud_base', {}).get('min')
+        if min_base is not None:
+            # NOTE: By B/C1.4.4.4 the precision of this value
+            # is in tens of metres so must be rounded
+            output['lowest_cloud_base'] = round(min_base, -1)
+
+        output['visibility'] = decoded.get('visibility', {}).get('value', None)
+
+        # Cloud cover is given in oktas, which we convert to a percentage
+        # NOTE: By B/C1.4.4.1 this percentage is always rounded up
+        if decoded.get('cloud_cover', {}).get('_code') is None:
+            return
+
+        N_oktas = decoded['cloud_cover'].get('_code')
+        if N_oktas == 9:
+            N_percentage = 113
+        else:
+            N_percentage = math.ceil((N_oktas / 8) * 100)
+
+        output['cloud_cover'] = N_percentage
+
+    def celsius_to_kelvin(celsius: float) -> float:
+        """
+        Converts the temperature, rounding to 2 decimal places.
+        """
+        return round(celsius + 273.15, 2)
+
+    def dewpoint_less_than_air_temp(air_temp: float, dewpoint: float) -> bool:
+        """
+        Verifies that the dewpoint temperature is less than or equal to
+        the air temperature.
+        """
+        if dewpoint <= air_temp:
+            return True
+
+        msg = f"Reported dewpoint temperature {dewpoint} is greater than the reported air temperature {air_temp}. Elements set to missing"  # noqa
+        LOGGER.warning(msg)
+        warning_msgs.append(msg)
+        return False
+
+    def parse_temperature() -> None:
+        """
+        Obtains the air and dewpoint temperature from the
+        decoded report, converts to kelvin, and verifies that
+        the dewpoint temperature is less than or equal to the
+        air temperature.
+        """
+        air_temp = decoded.get('air_temperature', {}).get('value')
+        dewpoint_temp = decoded.get('dewpoint_temperature', {}).get('value')
+
+        if air_temp is not None:
+            output['air_temperature'] = celsius_to_kelvin(air_temp)
+        if dewpoint_temp is not None:
+            output['dewpoint_temperature'] = celsius_to_kelvin(dewpoint_temp)
+
+        if air_temp is None or dewpoint_temp is None:
+            return
+
+        # Final check that the values are valid
+        if not dewpoint_less_than_air_temp(air_temp, dewpoint_temp):
+            output['air_temperature'] = None
+            output['dewpoint_temperature'] = None
+
+    def estimate_relative_humidity(A: float, D: float) -> float:
+        """This implements Teten's equation to
+        estimate the relative humidity.
+
+        Args:
+            A (float): The air temperature.
+            D (float): Thew dewpoint temperature.
+
+        Returns:
+            float: The relative humidity.
+        """
+        # Convert air temperature and dewpoint temperature to
+        # Celsius
+        A -= 273.15
+        D -= 273.15
+
+        # Define constants
+        beta = 17.625
+        lam = 243.04
+
+        return 100 * math.exp(((beta*D)/(lam+D)) - ((beta*A)/(lam+A)))
+
+    def parse_relative_humidity() -> None:
+        """
+        Obtains the relative humidity from the decoded report,
+        and estimates it if it is missing.
+        """
+        rh = decoded.get('relative_humidity', {}).get('value')
+
+        # Estimate the relative humidity if it is missing
+        if rh is None:
+            A = output.get('air_temperature')
+            D = output.get('dewpoint_temperature')
+
+            # Check they both exist first
+            if (A is None) or (D is None):
+                return
+
+            rh = estimate_relative_humidity(A, D)
+
+        output['relative_humidity'] = rh
+
+    def parse_pressure() -> None:
+        """
+        Obtains the station pressure, sea level pressure,
+        isobaric surface, and pressure tendency from the
+        decoded report.
+        """
+        def convert_to_rounded_pa(hpa: float) -> float:
+            """
+            Converts the pressure from hPa to Pa, rounding to
+            the nearest 10. This is required by B/C 1.3.1.,
+            1.3.2., and 1.3.3.
+            """
+            return round(hpa * 100, -1)
+
+        sp = decoded.get('station_pressure', {}).get('value')
+        if sp is not None:
+            output['station_pressure'] = convert_to_rounded_pa(sp)
+
+        slp = decoded.get('sea_level_pressure', {}).get('value')
+        if slp is not None:
+            output['sea_level_pressure'] = convert_to_rounded_pa(slp)
+
+        ibs = decoded.get('geopotential', {}).get('surface', {}).get('value')
+        if ibs is not None:
+            output['isobaric_surface'] = convert_to_rounded_pa(ibs)
+
+        output['geopotential_height'] = decoded.get('geopotential', {}).get('height', {}).get('value')  # noqa
+
+        pc = decoded.get('pressure_tendency', {}).get(
+            'change', {}).get('value')
+        if pc is not None:
+            output['3hr_pressure_change'] = convert_to_rounded_pa(pc)
+
+        output['pressure_tendency_characteristic'] = decoded.get('pressure_tendency', {}).get('tendency', {}).get('value')  # noqa
+
+    def parse_precipitation() -> None:
+        """
+        Obtains the precipitation amount and time period from
+        the decoded report. No unit change required, as
+        it is given in mm, which is equal to kg/m^2 of rain.
+        """
+        output['precipitation_s1'] = decoded.get('precipitation_s1', {}).get('amount', {}).get('value')  # noqa
+
+        # NOTE: When the precipitation measurement RRR has code 990, this
+        # represents a trace amount of rain
+        # (<0.01 inches), which pymetdecoder records as 0.
+        # We agree with this choice, and so no change has been made.
+        output['ps1_time_period'] = -1 * decoded.get('precipitation_s1', {}).get('time_before_obs', {}).get('value')  # noqa
+
+    def parse_weather() -> None:
+        """
+        Obtains the present and past weather from the decoded
+        report, as well as the past weather time period based
+        upon the hour of observation (B/C1.10.1.8.1).
+        """
+        output['present_weather'] = decoded.get('present_weather', {}).get('value')  # noqa
+
+        output['past_weather_1'] = decoded.get('past_weather', {}).get('past_weather_1', {}).get('value')  # noqa
+        output['past_weather_2'] = decoded.get('past_weather', {}).get('past_weather_2', {}).get('value')  # noqa
+
+        # The past weather time period is determined by the hour
+        # of observation. Remember, all time periods must be negative.
+        hr = output['hour']
+        if hr % 6 == 0:
+            output['past_weather_time_period'] = -6
+        elif hr % 3 == 0:
+            output['past_weather_time_period'] = -3
+        elif hr % 2 == 0:
+            output['past_weather_time_period'] = -2
+        else:
+            output['past_weather_time_period'] = -1
+
+    def set_default_low_middle_high_clouds() -> None:
+        """
+        Sets the default values for the low, middle, and high
+        cloud types and amounts based upon B/C1.4.4.3.1.
+        """
+        output['cloud_vs_s1'] = 63
+        output['low_cloud_type'] = 63
+        output['middle_cloud_type'] = 63
+        output['high_cloud_type'] = 63
+        output['cloud_amount_s1'] = 0
+
+    def process_cloud_amount() -> None:
+        """
+        Uses the B/C1 regulations to calculate what the cloud
+        amount and vertical significance for section 1 clouds
+        should be. This depends on which cloud levels
+        are present in the report.
+        """
+        if decoded['cloud_types'].get('low_cloud_amount') is not None:
+            # Low cloud amount is given in oktas, and by B/C1.4.4.3.1 it
+            # stays that way for BUFR
+            cloud_amount = decoded.get('cloud_types', {}).get('low_cloud_amount', {}).get('value')  # noqa
+
+            # If the cloud amount is 9 oktas, this means the sky was obscured
+            # and we keep the value as None
+            if cloud_amount == 9:
+                # By B/C1.4.4.2, if sky obscured, use significance code 5
+                output['cloud_vs_s1'] = 5
+            else:
+                # By B/C1.4.4.2, if low clouds present, use significance code 7
+                output['cloud_vs_s1'] = 7
+                output['cloud_amount_s1'] = cloud_amount
+
+        elif decoded['cloud_types'].get('middle_cloud_amount') is not None:
+            # Middle cloud amount is given in oktas, and by B/C1.4.4.3.1 it
+            # stays that way for BUFR
+            cloud_amount = decoded.get('cloud_types', {}).get('middle_cloud_amount', {}).get('value')  # noqa
+
+            # If the cloud amount is 9 oktas, this means the sky was obscured
+            # and we keep the value as None
+            if cloud_amount == 9:
+                # By B/C1.4.4.2, if sky obscured, use significance code 5
+                output['cloud_vs_s1'] = 5
+            else:
+                # By B/C1.4.4.2, only middle clouds present, use significance
+                # code 8
+                output['cloud_vs_s1'] = 8
+                output['cloud_amount_s1'] = cloud_amount
+
+        # According to B/C1.4.4.3.1, if only high clouds present, cloud amount
+        # and significance code will be set to 0
+        elif decoded['cloud_types'].get('high_cloud_amount') is not None:
+            output['cloud_vs_s1'] = 0
+            output['cloud_amount_s1'] = 0
+
+        # According to B/C1.4.4.3.1, if no clouds present, use significance
+        # code  62
+        else:
+            output['cloud_vs_s1'] = 62
+            output['cloud_amount_s1'] = 0
+
+    def parse_low_middle_high_clouds() -> None:
+        """
+        Translates the cloud type flags from the SYNOP codes to
+        the BUFR codes, and obtains the low, middle, and high
+        cloud amounts.
+        """
+        cloud_types = decoded.get('cloud_types')
+        if cloud_types is None:
+            set_default_low_middle_high_clouds()
+            return
+
+        Cl = decoded.get('cloud_types', {}).get('low_cloud_type', {}).get('value')  # noqa
+        if Cl is not None:
+            output['low_cloud_type'] = Cl + 30
+
+        Cm = decoded.get('cloud_types', {}).get('middle_cloud_type', {}).get('value')  # noqa
+        if Cm is not None:
+            output['middle_cloud_type'] = Cm + 20
+
+        Ch = decoded.get('cloud_types', {}).get('high_cloud_type', {}).get('value')  # noqa
+        if Ch is not None:
+            output['high_cloud_type'] = Ch + 10
+
+        # Now calculate the cloud amounts as a percentage
+        process_cloud_amount()
+
 
 def parse_synop(message: str, year: int, month: int) -> dict:
     """
@@ -175,7 +570,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
         except Exception:
             output['hour'] = None
 
-            # The minute will be 00 unless specified by exact observation time
+    # The minute will be 00 unless specified by exact observation time
     if decoded.get('exact_obs_time') is not None:
         try:
             output['minute'] = decoded['exact_obs_time']['minute']['value']
@@ -276,7 +671,7 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             output['visibility'] = None
 
     # Cloud cover is given in oktas, which we convert to a percentage
-    #  NOTE: By B/C10.4.4.1 this percentage is always rounded up
+    #  NOTE: By B/C1.4.4.1 this percentage is always rounded up
     if decoded.get('cloud_cover') is not None:
         try:
             N_oktas = decoded['cloud_cover']['_code']
@@ -1225,7 +1620,7 @@ def extract_individual_synop(data: str) -> list:
     # that we're about to throw away (data[0]) also contains AAXX.
     # If this is true, there must be a typo present at the AAXX YYGGiw
     # part and thus we can't process the message.
-    if data[0].__contains__("AAXX"):
+    if "AAXX" in data[0]:
         raise ValueError((
             f"The following SYNOP message is invalid: {data[0]}"
             " Please check again for typos."
@@ -1238,7 +1633,7 @@ def extract_individual_synop(data: str) -> list:
         if "AAXX" in d:
             s0 = d
         else:
-            if not d.__contains__("="):
+            if "=" not in d:
                 raise ValueError((
                     "Delimiters (=) are not present in the string,"
                     " thus unable to identify separate SYNOP reports."

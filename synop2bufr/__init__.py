@@ -1014,7 +1014,11 @@ def parse_synop(message: str, year: int, month: int) -> dict:
             # The time period is expected to be in hours
             output['ps3_time_period'] = -1 * decoded['precipitation_s3']['time_before_obs']['value']  # noqa
         except Exception:
-            output['ps3_time_period'] = None
+            # Regional manual (1/12.11, 2/12.12, 3/12.10, etc.) states that
+            # the precipitation time period is 3 hours,
+            # or another period required for regional exchange.
+            # This means that if tR is not given, it is assumed to be 3 hours.
+            output['ps3_time_period'] = -3
 
     # Precipitation indicator iR is needed to determine whether the
     # section 1 and section 3 precipitation groups are missing because there
@@ -1205,10 +1209,7 @@ def extract_individual_synop(data: str) -> list:
 
     :returns: `list` of messages
     """
-
-    # Check for abbreviated header line TTAAii etc.
-
-    # Now split based as section 0 of synop, beginning AAXX YYGGi_w
+    # Split string based on section 0 of FM-12, beginning with AAXX
     start_position = data.find("AAXX")
 
     # Start position is -1 if AAXX is not present in the message
@@ -1217,7 +1218,19 @@ def extract_individual_synop(data: str) -> list:
             "Invalid SYNOP message: AAXX could not be found."
         )
 
-    data = re.split('(AAXX [0-9]{5})', data[start_position:])
+    # Split the string by AAXX YYGGiw
+    data = re.split(r'(AAXX\s+[0-9]{5})', data[start_position:])
+
+    # Check if the beginning of the message (e.g. ZCZC 123 etc.)
+    # that we're about to throw away (data[0]) also contains AAXX.
+    # If this is true, there must be a typo present at the AAXX YYGGiw
+    # part and thus we can't process the message.
+    if "AAXX" in data[0]:
+        raise ValueError((
+            f"The following SYNOP message is invalid: {data[0]}"
+            " Please check again for typos."
+        ))
+
     data = data[1:]  # Drop first null element
     # Iterate over messages processing
     messages = []
@@ -1225,12 +1238,11 @@ def extract_individual_synop(data: str) -> list:
         if "AAXX" in d:
             s0 = d
         else:
-            if not d.__contains__("="):
-                LOGGER.error((
+            if "=" not in d:
+                raise ValueError((
                     "Delimiters (=) are not present in the string,"
                     " thus unable to identify separate SYNOP reports."
-                    ))  # noqa
-                raise ValueError
+                ))
 
             d = re.sub(r"\n+", " ", d)
             d = re.sub(r"\x03", "", d)
@@ -1478,6 +1490,7 @@ def transform(data: str, metadata: str, year: int,
                 wsi_series, wsi_issuer, wsi_issue_number, wsi_local = wsi.split("-")   # noqa
 
                 # get other required metadata
+                station_name = metadata_dict[wsi]["station_name"]
                 latitude = metadata_dict[wsi]["latitude"]
                 longitude = metadata_dict[wsi]["longitude"]
                 station_height = metadata_dict[wsi]["elevation"]
@@ -1488,6 +1501,7 @@ def transform(data: str, metadata: str, year: int,
                 msg['_wsi_issuer'] = wsi_issuer
                 msg['_wsi_issue_number'] = wsi_issue_number
                 msg['_wsi_local'] = wsi_local
+                msg['_station_name'] = station_name
                 msg['_latitude'] = latitude
                 msg['_longitude'] = longitude
                 msg['_station_height'] = station_height
@@ -1541,9 +1555,25 @@ def transform(data: str, metadata: str, year: int,
                     # Stop duplicated warnings
                     can_var_warning_be_displayed = False
 
-                # Now we need to add the mappings for the cloud groups
+                # Define a new method which handles the updating of
+                # the mapping file with section 3 and 4 cloud data
+                def update_data_mapping(mapping: list, update: dict):
+                    match = False
+                    for idx in range(len(mapping)):
+                        if mapping[idx]['eccodes_key'] == update['eccodes_key']:  # noqa
+                            match = True
+                            break
+                    if match:
+                        mapping[idx] = update
+                    else:
+                        mapping.append(update)
+                    return mapping
+
+                # Now we add the mappings for the cloud groups
                 # of section 3 and 4
                 try:
+
+                    # Now add the rest of the mappings for section 3 clouds
                     for idx in range(num_s3_clouds):
                         # Build the dictionary of mappings for section 3
                         # group 8NsChshs
@@ -1556,12 +1586,10 @@ def transform(data: str, metadata: str, year: int,
                         # - verticalSignificance: used 7 times (for N,
                         # low-high cloud amount, low-high cloud drift)
                         s3_mappings = [
-                            {"eccodes_key": (
-                                f"#{idx+8}"
-                                "#verticalSignificanceSurfaceObservations"
-                            ),
+                            {"eccodes_key":
+                                f"#{idx+6}#verticalSignificanceSurfaceObservations",  # noqa
                                 "value": f"data:vs_s3_{idx+1}"},
-                            {"eccodes_key": f"#{idx+3}#cloudAmount",
+                            {"eccodes_key": f"#{idx+2}#cloudAmount",
                                 "value": f"data:cloud_amount_s3_{idx+1}",
                                 "valid_min": "const:0",
                                 "valid_max": "const:8"},
@@ -1571,8 +1599,10 @@ def transform(data: str, metadata: str, year: int,
                                 "value": f"data:cloud_height_s3_{idx+1}"}
                         ]
                         for m in s3_mappings:
-                            mapping.update(m)
+                            mapping['data'] = update_data_mapping(
+                                mapping=mapping['data'], update=m)
 
+                    # Now add the rest of the mappings for section 4 clouds
                     for idx in range(num_s4_clouds):
                         # Based upon the station height metadata, the
                         # value of vertical significance for section 4
@@ -1592,13 +1622,11 @@ def transform(data: str, metadata: str, year: int,
                         # NOTE: Some of the ecCodes keys are used in
                         # the above, so we must add 'num_s3_clouds'
                         s4_mappings = [
-                            {"eccodes_key": (
-                                f"#{idx+num_s3_clouds+8}"
-                                "#verticalSignificanceSurfaceObservations"
-                            ),
+                            {"eccodes_key":
+                                f"#{idx+num_s3_clouds+6}#verticalSignificanceSurfaceObservations",  # noqa
                                 "value": f"const:{vs_s4}"},
                             {"eccodes_key":
-                                f"#{idx+num_s3_clouds+3}#cloudAmount",
+                                f"#{idx+num_s3_clouds+2}#cloudAmount",
                                 "value": f"data:cloud_amount_s4_{idx+1}",
                                 "valid_min": "const:0",
                                 "valid_max": "const:8"},
@@ -1613,7 +1641,8 @@ def transform(data: str, metadata: str, year: int,
                                 "value": f"data:cloud_top_s4_{idx+1}"}
                         ]
                         for m in s4_mappings:
-                            mapping.update(m)
+                            mapping['data'] = update_data_mapping(
+                                mapping=mapping['data'], update=m)
                 except Exception as e:
                     LOGGER.error(e)
                     LOGGER.error(f"Missing station height for station {tsi}")
@@ -1628,8 +1657,7 @@ def transform(data: str, metadata: str, year: int,
                 unexpanded_descriptors = [301150, bufr_template]
                 short_delayed_replications = []
                 # update replications
-                delayed_replications = [max(1, num_s3_clouds),
-                                        max(1, num_s4_clouds)]
+                delayed_replications = [num_s3_clouds, num_s4_clouds]
                 extended_delayed_replications = []
                 table_version = 37
                 try:

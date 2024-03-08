@@ -252,7 +252,7 @@ def test_dewpoint_qc(caplog):
     parse_synop(invalid_dewpoint, 2000, 1)
 
     # Check that the warning message is correct
-    assert "Reported dewpoint temperature 284.25 is greater than the reported air temperature 283.45. Elements set to missing" in caplog.text  # noqa
+    assert "Reported dewpoint temperature 11.1\u00B0C is greater than the reported air temperature 10.3\u00B0C. Elements set to missing" in caplog.text  # noqa
 
 
 def test_range_qc(metadata_string):

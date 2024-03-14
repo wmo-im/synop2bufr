@@ -1484,7 +1484,7 @@ def transform(data: str, metadata: str, year: int,
                 warning_msgs = []
                 error_msgs = []
                 continue
-            
+
             def truncate_to_twenty(name: str) -> str:
                 """
                 Ensures the string is no longer than 20 characters,
@@ -1497,6 +1497,7 @@ def transform(data: str, metadata: str, year: int,
                 Returns:
                     str: This name truncated to 20 characters.
                 """
+                LOGGER.info(f"Truncating station name {name} to 20 characters")
                 return name[:20]
 
             # parse WSI to get sections

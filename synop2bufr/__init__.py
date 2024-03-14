@@ -33,7 +33,7 @@ from typing import Iterator
 from pymetdecoder import synop
 from csv2bufr import BUFRMessage
 
-__version__ = '0.6.2'
+__version__ = '0.7.0_dev'
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1485,12 +1485,30 @@ def transform(data: str, metadata: str, year: int,
                 error_msgs = []
                 continue
 
+            def truncate_to_twenty(name: str) -> str:
+                """
+                Ensures the string is no longer than 20 characters,
+                which is the maximum length allowed for the station name
+                in the BUFR template.
+
+                Args:
+                    name (str): The station or site name.
+
+                Returns:
+                    str: This name truncated to 20 characters.
+                """
+                if len(name) <= 20:
+                    return name
+                LOGGER.info(f"Truncating station name {name} to 20 characters")
+                return name[:20]
+
             # parse WSI to get sections
             try:
                 wsi_series, wsi_issuer, wsi_issue_number, wsi_local = wsi.split("-")   # noqa
 
                 # get other required metadata
-                station_name = metadata_dict[wsi]["station_name"]
+                station_name = truncate_to_twenty(
+                    metadata_dict[wsi]["station_name"])
                 latitude = metadata_dict[wsi]["latitude"]
                 longitude = metadata_dict[wsi]["longitude"]
                 station_height = metadata_dict[wsi]["elevation"]

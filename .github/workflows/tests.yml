@@ -31,8 +31,7 @@ jobs:
         python3 -m pip install --upgrade pip
         pip3 install https://github.com/wmo-im/csv2bufr/archive/master.zip
         pip3 install -r requirements.txt
-        pip3 install -r requirements-dev.txt
-        pip3 install --no-cache-dir https://github.com/wmo-im/pymetdecoder/archive/refs/tags/v0.1.11.zip        
+        pip3 install -r requirements-dev.txt   
         python3 setup.py install
     - name: run tests ⚙️
       run: |

@@ -1497,6 +1497,8 @@ def transform(data: str, metadata: str, year: int,
                 Returns:
                     str: This name truncated to 20 characters.
                 """
+                if len(name) <= 20:
+                    return name
                 LOGGER.info(f"Truncating station name {name} to 20 characters")
                 return name[:20]
 

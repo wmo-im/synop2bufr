@@ -1293,7 +1293,7 @@ def transform(data: str, metadata: str, year: int,
     # each report necessitates this approach, because
     # we want to ensure the warning is only appended
     # to the first conversion
-    can_var_warning_be_displayed = True
+    can_var_info_be_displayed = True
 
     # ===================
     # First parse metadata file
@@ -1544,34 +1544,36 @@ def transform(data: str, metadata: str, year: int,
                 # and subcentre codes are present
                 missing_env_vars = []
 
-                if os.environ.get("BUFR_ORIGINATING_CENTRE") is None:
+                ORIGINATING_CENTRE = os.environ.get("BUFR_ORIGINATING_CENTRE", 65535)  # noqa
+                ORIGINATING_SUBCENTRE = os.environ.get("BUFR_ORIGINATING_SUBCENTRE", 65535)  # noqa
+
+                if ORIGINATING_CENTRE == 65535:
                     missing_env_vars.append("BUFR_ORIGINATING_CENTRE")
                 else:
                     # Add the BUFR header centre and subcentre to mappings
                     mapping["header"].append({
                         "eccodes_key": "bufrHeaderCentre",
-                        "value": f"const:{os.environ.get('BUFR_ORIGINATING_CENTRE')}"  # noqa
+                        "value": f"const:{ORIGINATING_CENTRE}"  # noqa
                     })
 
-                if os.environ.get("BUFR_ORIGINATING_SUBCENTRE") is None:
+                if ORIGINATING_SUBCENTRE == 65535:
                     missing_env_vars.append("BUFR_ORIGINATING_SUBCENTRE")
                 else:
                     mapping["header"].append({
                         "eccodes_key": "bufrHeaderSubCentre",
-                        "value": f"const:{os.environ.get('BUFR_ORIGINATING_SUBCENTRE')}"  # noqa
+                        "value": f"const:{ORIGINATING_SUBCENTRE}"  # noqa
                     })
 
                 # If either of these environment variables are not set,
-                # we will default to missing and warn the user once
-                if missing_env_vars and can_var_warning_be_displayed:
-                    # Display ewarning messages
+                # we will default to missing and inform the user once
+                if missing_env_vars and can_var_info_be_displayed:
+                    # Display info messages
                     for var in missing_env_vars:
-                        var_warning = f"The {var} environment variable is not set, will default to missing!"  # noqa
-                        LOGGER.warning(var_warning)
-                        warning_msgs.append(var_warning)
-                        can_var_warning_be_displayed = False
+                        var_info = f"The {var} environment variable is not set, will default to missing!"  # noqa
+                        LOGGER.info(var_info)
+                        can_var_info_be_displayed = False
                     # Stop duplicated warnings
-                    can_var_warning_be_displayed = False
+                    can_var_info_be_displayed = False
 
                 # Define a new method which handles the updating of
                 # the mapping file with section 3 and 4 cloud data

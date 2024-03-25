@@ -23,7 +23,6 @@ import io
 import os
 import re
 from setuptools import Command, find_packages, setup
-import subprocess
 
 
 class PyTest(Command):
@@ -73,9 +72,6 @@ DESCRIPTION = 'Convert a SYNOP TAC messages or a SYNOP file to BUFR4.'
 # ensure a fresh MANIFEST file is generated
 if (os.path.exists('MANIFEST')):
     os.unlink('MANIFEST')
-
-# Install dependencies not on PyPI
-subprocess.check_call("pip install https://github.com/wmo-im/csv2bufr/archive/main.zip", shell=True) # noqa
 
 setup(
     name='synop2bufr',

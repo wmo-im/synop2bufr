@@ -1544,25 +1544,26 @@ def transform(data: str, metadata: str, year: int,
                 # and subcentre codes are present
                 missing_env_vars = []
 
-                ORIGINATING_CENTRE = os.environ.get("BUFR_ORIGINATING_CENTRE", 65535)  # noqa
-                ORIGINATING_SUBCENTRE = os.environ.get("BUFR_ORIGINATING_SUBCENTRE", 65535)  # noqa
+                ORIGINATING_CENTRE = os.environ.get("BUFR_ORIGINATING_CENTRE", None)  # noqa
+                ORIGINATING_SUBCENTRE = os.environ.get("BUFR_ORIGINATING_SUBCENTRE", None)  # noqa
 
-                if ORIGINATING_CENTRE == 65535:
+                if ORIGINATING_CENTRE is None:
                     missing_env_vars.append("BUFR_ORIGINATING_CENTRE")
-                else:
-                    # Add the BUFR header centre and subcentre to mappings
-                    mapping["header"].append({
-                        "eccodes_key": "bufrHeaderCentre",
-                        "value": f"const:{ORIGINATING_CENTRE}"  # noqa
-                    })
+                    ORIGINATING_CENTRE = 65535
 
-                if ORIGINATING_SUBCENTRE == 65535:
+                if ORIGINATING_SUBCENTRE is None:
                     missing_env_vars.append("BUFR_ORIGINATING_SUBCENTRE")
-                else:
-                    mapping["header"].append({
-                        "eccodes_key": "bufrHeaderSubCentre",
-                        "value": f"const:{ORIGINATING_SUBCENTRE}"  # noqa
-                    })
+                    ORIGINATING_SUBCENTRE = 65535
+
+                # Add the BUFR header centre and subcentre to mappings
+                mapping["header"].append({
+                    "eccodes_key": "bufrHeaderCentre",
+                    "value": f"const:{ORIGINATING_CENTRE}"  # noqa
+                })
+                mapping["header"].append({
+                    "eccodes_key": "bufrHeaderSubCentre",
+                    "value": f"const:{ORIGINATING_SUBCENTRE}"  # noqa
+                })
 
                 # If either of these environment variables are not set,
                 # we will default to missing and inform the user once

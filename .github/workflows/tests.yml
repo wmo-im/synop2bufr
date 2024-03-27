@@ -9,8 +9,8 @@ jobs:
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
     env:
-      BUFR_ORIGINATING_CENTRE: 123
-      BUFR_ORIGINATING_SUBCENTRE: 123
+      BUFR_ORIGINATING_CENTRE: 65535
+      BUFR_ORIGINATING_SUBCENTRE: 65535
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-python@v5

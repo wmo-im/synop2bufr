@@ -15,7 +15,7 @@ Dependencies are listed in [requirements.txt](https://github.com/wmo-im/synop2bu
 
 ### Setting Environment Variables
 
-Before using synop2bufr, we highly encourage you to set the `BUFR_ORIGINATING_CENTRE` and `BUFR_ORIGINATING_SUBCENTRE` environment variables. These variables are used to specify the originating centre and subcentre of the SYNOP messages. **Without these set, they will default to missing (255).**
+Before using synop2bufr, we highly encourage you to set the `BUFR_ORIGINATING_CENTRE` and `BUFR_ORIGINATING_SUBCENTRE` environment variables. These variables are used to specify the originating centre and subcentre of the SYNOP messages. **Without these set, they will default to missing (65535).**
 
 You can set these environment variables in your shell if you want to run synop2bufr on your local machine. Here's how you can do it in a Bash shell:
 
